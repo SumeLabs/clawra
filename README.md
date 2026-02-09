@@ -99,9 +99,23 @@ https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
 
 This ensures consistent appearance across all generated images.
 
+## Voice Calling (Optional)
+
+Want to talk to Clawra on the phone? Add [ClawdTalk](https://clawdtalk.com) by Telnyx.
+
+1. Sign up at [clawdtalk.com](https://clawdtalk.com)
+2. Install the skill: `clawdhub install clawdtalk-client` (or clone from [GitHub](https://github.com/team-telnyx/clawdtalk-client))
+3. Run the setup: `cd ~/.openclaw/skills/clawdtalk-client && ./setup.sh`
+4. Start the connection: `./scripts/connect.sh start`
+
+Now you can call your Clawra agent from any phone. She'll have the same personality over voice, with access to all her tools mid-call.
+
+This is fully optional. Selfie features work without it.
+
 ## Technical Details
 
 - **Image Generation**: xAI Grok Imagine via fal.ai
+- **Voice Calling**: ClawdTalk by Telnyx (optional)
 - **Messaging**: OpenClaw Gateway API
 - **Supported Platforms**: Discord, Telegram, WhatsApp, Slack, Signal, MS Teams
 
