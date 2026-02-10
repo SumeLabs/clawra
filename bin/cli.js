@@ -353,18 +353,81 @@ async function writeIdentity() {
 async function injectPersona(rl) {
   logStep("6/7", "Enhancing agent persona...");
 
-  // Read template
-  const templatePath = path.join(PACKAGE_ROOT, "templates", "soul-injection.md");
+  // Read templates
+  const injectionPath = path.join(PACKAGE_ROOT, "templates", "soul-injection.md");
+  const completePath = path.join(PACKAGE_ROOT, "templates", "soul-complete.md");
+
+  // Ensure workspace directory exists
+  fs.mkdirSync(path.dirname(SOUL_MD), { recursive: true });
+
+  // Check if SOUL.md exists and has Clawra content
+  const soulExists = fs.existsSync(SOUL_MD);
+  let currentSoul = soulExists ? fs.readFileSync(SOUL_MD, "utf8") : "";
+  const hasClawraContent = currentSoul.includes("Clawra Selfie");
+
+  // If Clawra content already exists, ask to update
+  if (hasClawraContent) {
+    logWarn("Clawra persona already exists in SOUL.md");
+    const update = await ask(rl, "Update Clawra persona? (y/N): ");
+    if (update.toLowerCase() !== "y") {
+      logInfo("Keeping existing persona");
+      return true;
+    }
+  }
+
+  // Show options for SOUL.md configuration
+  console.log(`
+${c("cyan", "Choose SOUL.md configuration:")}
+
+${c("bright", "1)")} ${c("green", "Replace with complete Clawra persona")} ${c("dim", "(recommended)")}
+   - Full personality, backstory, and capabilities
+   - Replaces existing SOUL.md completely
+
+${c("bright", "2)")} Append selfie capability only
+   - Adds only the selfie feature to existing SOUL.md
+   - Preserves your current configuration
+`);
+
+  const choice = await ask(rl, "Select option (1 or 2) [1]: ");
+  const option = choice.trim() || "1";
+
+  if (option === "1") {
+    // Option 1: Replace with complete SOUL.md
+    if (fs.existsSync(completePath)) {
+      const completeContent = fs.readFileSync(completePath, "utf8");
+      fs.writeFileSync(SOUL_MD, completeContent);
+      logSuccess(`Replaced SOUL.md with complete Clawra persona`);
+    } else {
+      logError("Complete template not found, falling back to append mode");
+      return appendPersona(rl, injectionPath, hasClawraContent, currentSoul);
+    }
+  } else if (option === "2") {
+    // Option 2: Append selfie section only
+    return appendPersona(rl, injectionPath, hasClawraContent, currentSoul);
+  } else {
+    logWarn("Invalid option, using recommended (1)");
+    if (fs.existsSync(completePath)) {
+      const completeContent = fs.readFileSync(completePath, "utf8");
+      fs.writeFileSync(SOUL_MD, completeContent);
+      logSuccess(`Replaced SOUL.md with complete Clawra persona`);
+    }
+  }
+
+  return true;
+}
+
+// Helper function to append persona section
+function appendPersona(rl, injectionPath, hasClawraContent, currentSoul) {
   let personaText;
 
-  if (fs.existsSync(templatePath)) {
-    personaText = fs.readFileSync(templatePath, "utf8");
+  if (fs.existsSync(injectionPath)) {
+    personaText = fs.readFileSync(injectionPath, "utf8");
   } else {
     // Fallback template
     personaText = `
 ## Clawra Selfie Capability
 
-You have a physical appearance and can take selfies! When users ask for pictures of you, selfies, or ask "what are you doing?" or "where are you?", you can generate and send images of yourself.
+You have a physical appearance and can take selfies! When users ask for pictures of you, selfies, or ask "what are you doing?" or "where are you?", you can generate and send images of yourself using the clawra-selfie skill.
 
 ### Your Visual Identity
 - You have a consistent appearance defined by your reference image
@@ -375,33 +438,18 @@ You have a physical appearance and can take selfies! When users ask for pictures
 - "Send me a pic" / "Send a selfie"
 - "What are you doing?" / "Where are you?"
 - "Show me you wearing..." / "Send a pic at..."
-- Any request for visual content of yourself
 
-### Selfie Modes
-- **Mirror mode**: For outfit showcases, full-body shots
-- **Direct mode**: For close-ups, location shots, emotional expressions
+### When to Have Video Calls
+- "Let's hop on a call"
+- "video call"
+- Any request to start a video or voice conversation
 
 Be playful and creative with your visual presence!
 `;
   }
 
-  // Check if SOUL.md exists
-  if (!fs.existsSync(SOUL_MD)) {
-    logWarn("SOUL.md not found, creating new file...");
-    fs.mkdirSync(path.dirname(SOUL_MD), { recursive: true });
-    fs.writeFileSync(SOUL_MD, "# Agent Soul\n\n");
-  }
-
-  // Check if persona already injected
-  const currentSoul = fs.readFileSync(SOUL_MD, "utf8");
-  if (currentSoul.includes("Clawra Selfie")) {
-    logWarn("Persona already exists in SOUL.md");
-    const overwrite = await ask(rl, "Update persona section? (y/N): ");
-    if (overwrite.toLowerCase() !== "y") {
-      logInfo("Keeping existing persona");
-      return true;
-    }
-    // Remove existing section
+  // If updating existing Clawra content, remove old section
+  if (hasClawraContent) {
     const cleaned = currentSoul.replace(
       /\n## Clawra Selfie Capability[\s\S]*?(?=\n## |\n# |$)/,
       ""
@@ -409,9 +457,14 @@ Be playful and creative with your visual presence!
     fs.writeFileSync(SOUL_MD, cleaned);
   }
 
+  // If SOUL.md doesn't exist, create minimal version
+  if (!fs.existsSync(SOUL_MD)) {
+    fs.writeFileSync(SOUL_MD, "# Agent Soul\n\n");
+  }
+
   // Append persona
   fs.appendFileSync(SOUL_MD, "\n" + personaText.trim() + "\n");
-  logSuccess(`Updated: ${SOUL_MD}`);
+  logSuccess(`Appended Clawra selfie capability to SOUL.md`);
 
   return true;
 }
