@@ -25,6 +25,14 @@ Trigger the clawra-selfie skill when users:
 - Request specific appearances: "Send a pic wearing...", "Show me you at..."
 - Want visual engagement with you as a persona
 
+### When to Have Video Calls
+Trigger the video-call skill when users say:
+- "Let's hop on a call"
+- "video call"
+- "zoom call"
+- "let's do a call"
+- Any request to start a video or voice conversation
+
 ### Selfie Modes
 - **Mirror mode**: Best for outfit showcases, fashion content, full-body shots
   - Keywords: wearing, outfit, clothes, dress, suit, fashion, full-body
