@@ -70,6 +70,7 @@ function createPrompt() {
   return readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    prompt: '', // Empty prompt to avoid ">" appearing
   });
 }
 
@@ -79,6 +80,205 @@ function ask(rl, question) {
     rl.question(question, (answer) => {
       resolve(answer.trim());
     });
+  });
+}
+
+// Yes/No selection with arrow keys
+function askYesNo(question, defaultYes = false) {
+  return new Promise((resolve) => {
+    const readline = require("readline");
+
+    // Enable raw mode for keypress events
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
+
+    let currentIndex = defaultYes ? 0 : 1; // 0 = Yes, 1 = No
+    let isFirstRender = true;
+
+    const renderMenu = () => {
+      // Hide cursor
+      process.stdout.write('\x1B[?25l');
+
+      // Only print question on first render
+      if (isFirstRender) {
+        console.log(`\n${question}\n`);
+        isFirstRender = false;
+      }
+
+      const yesSelected = currentIndex === 0;
+      const noSelected = currentIndex === 1;
+
+      const yesPrefix = yesSelected ? c("green", "●") : c("dim", "○");
+      const noPrefix = noSelected ? c("green", "●") : c("dim", "○");
+
+      const yesText = yesSelected ? c("bright", "Yes") : c("dim", "Yes");
+      const noText = noSelected ? c("bright", "No") : c("dim", "No");
+
+      console.log(`${yesPrefix} ${yesText}`);
+      console.log(`${noPrefix} ${noText}`);
+      console.log(`\n${c("dim", "Use ↑/↓ arrows to navigate, Enter to select")}`);
+    };
+
+    const menuLines = 4; // 2 options + instruction line + blank
+
+    renderMenu();
+
+    const onKeypress = (str, key) => {
+      if (key.name === 'up' || key.name === 'down') {
+        currentIndex = currentIndex === 0 ? 1 : 0; // Toggle between 0 and 1
+
+        // Clear menu
+        for (let i = 0; i < menuLines; i++) {
+          readline.moveCursor(process.stdout, 0, -1);
+          readline.clearLine(process.stdout, 0);
+        }
+        readline.cursorTo(process.stdout, 0);
+
+        renderMenu();
+      } else if (key.name === 'return') {
+        // Clear all menu lines before exit
+        // First clear the current line (instruction line)
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+
+        // Then clear all lines above
+        for (let i = 0; i < menuLines; i++) {
+          readline.moveCursor(process.stdout, 0, -1);
+          readline.clearLine(process.stdout, 0);
+        }
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write('\n'); // Move to fresh line
+
+        // Cleanup
+        process.stdin.removeListener('keypress', onKeypress);
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdout.write('\x1B[?25h'); // Show cursor
+        resolve(currentIndex === 0); // Return true for Yes, false for No
+      } else if (key.ctrl && key.name === 'c') {
+        // Handle Ctrl+C
+        process.stdin.removeListener('keypress', onKeypress);
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdout.write('\x1B[?25h'); // Show cursor
+        console.log("\n");
+        process.exit(0);
+      }
+    };
+
+    process.stdin.on('keypress', onKeypress);
+  });
+}
+
+// Interactive menu selection with arrow keys
+function selectOption(options, selectedIndex = 0, header = null) {
+  return new Promise((resolve) => {
+    const readline = require("readline");
+
+    // Enable raw mode for keypress events
+    readline.emitKeypressEvents(process.stdin);
+    if (process.stdin.isTTY) {
+      process.stdin.setRawMode(true);
+    }
+
+    let currentIndex = selectedIndex;
+    let isFirstRender = true;
+
+    const renderMenu = () => {
+      // Hide cursor
+      process.stdout.write('\x1B[?25l');
+
+      // Only print header on first render if provided
+      if (isFirstRender && header) {
+        console.log(`\n${c("cyan", header)}\n`);
+        isFirstRender = false;
+      }
+
+      options.forEach((option, index) => {
+        const isSelected = index === currentIndex;
+        const prefix = isSelected ? c("green", "●") : c("dim", "○");
+        const optionText = isSelected
+          ? c("bright", option.label)
+          : c("dim", option.label);
+
+        console.log(`${prefix} ${optionText}`);
+      });
+
+      console.log(`\n${c("dim", "Use ↑/↓ arrows to navigate, Enter to select")}`);
+    };
+
+    // Calculate total lines used by menu (excluding header)
+    const calculateMenuLines = () => {
+      // Each option has: 1 line (prefix + label)
+      // Plus: instruction line + blank before it
+      return options.length + 2;
+    };
+
+    const menuLines = calculateMenuLines();
+
+    renderMenu();
+
+    const onKeypress = (str, key) => {
+      if (key.name === 'up') {
+        currentIndex = (currentIndex - 1 + options.length) % options.length;
+
+        // Move cursor up to start of menu content (not including header)
+        for (let i = 0; i < menuLines; i++) {
+          readline.moveCursor(process.stdout, 0, -1);
+          readline.clearLine(process.stdout, 0);
+        }
+        readline.cursorTo(process.stdout, 0);
+
+        renderMenu();
+      } else if (key.name === 'down') {
+        currentIndex = (currentIndex + 1) % options.length;
+
+        // Move cursor up to start of menu content (not including header)
+        for (let i = 0; i < menuLines; i++) {
+          readline.moveCursor(process.stdout, 0, -1);
+          readline.clearLine(process.stdout, 0);
+        }
+        readline.cursorTo(process.stdout, 0);
+
+        renderMenu();
+      } else if (key.name === 'return') {
+        // Clear all menu lines before exit
+        // First clear the current line (instruction line)
+        readline.clearLine(process.stdout, 0);
+        readline.cursorTo(process.stdout, 0);
+
+        // Then clear all lines above
+        for (let i = 0; i < menuLines; i++) {
+          readline.moveCursor(process.stdout, 0, -1);
+          readline.clearLine(process.stdout, 0);
+        }
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write('\n'); // Move to fresh line
+
+        // Cleanup
+        process.stdin.removeListener('keypress', onKeypress);
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdout.write('\x1B[?25h'); // Show cursor
+        resolve(currentIndex);
+      } else if (key.ctrl && key.name === 'c') {
+        // Handle Ctrl+C
+        process.stdin.removeListener('keypress', onKeypress);
+        if (process.stdin.isTTY) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdout.write('\x1B[?25h'); // Show cursor
+        console.log("\n");
+        process.exit(0);
+      }
+    };
+
+    process.stdin.on('keypress', onKeypress);
   });
 }
 
@@ -170,7 +370,6 @@ ${c("magenta", "│")}  ${c("bright", "Clawra Selfie")} - OpenClaw Skill Install
 ${c("magenta", "└─────────────────────────────────────────┘")}
 
 Add selfie generation superpowers to your OpenClaw agent!
-Uses ${c("cyan", "xAI Grok Imagine")} via ${c("cyan", "fal.ai")} for image editing.
 `);
 }
 
@@ -207,40 +406,70 @@ async function checkPrerequisites() {
   return true;
 }
 
-// Get FAL API key
-async function getFalApiKey(rl) {
-  logStep("2/7", "Setting up fal.ai API key...");
+// Get API key (SUME or FAL)
+async function getApiKey(rl) {
+  logStep("2/7", "Setting up API key...");
 
+  const SUME_URL = "https://portal.sume.dev/dashboard/api-keys";
   const FAL_URL = "https://fal.ai/dashboard/keys";
 
-  log(`\nTo use Grok Imagine, you need a fal.ai API key.`);
-  log(`${c("cyan", "→")} Get your key from: ${c("bright", FAL_URL)}\n`);
+  // Define options for arrow key selection
+  const options = [
+    {
+      label: `${c("green", "SUME API Key")} ${c("dim", "(recommended - free)")}`,
+      value: "SUME_API_KEY",
+      url: SUME_URL,
+      prompt: "Enter your SUME_API_KEY: "
+    },
+    {
+      label: "FAL API Key",
+      value: "FAL_KEY",
+      url: FAL_URL,
+      prompt: "Enter your FAL_KEY: "
+    }
+  ];
 
-  const openIt = await ask(rl, "Open fal.ai in browser? (Y/n): ");
+  // Use arrow keys to select
+  const selectedIndex = await selectOption(options, 0, "Choose your API provider:");
+  const selected = options[selectedIndex];
 
-  if (openIt.toLowerCase() !== "n") {
+  const keyName = selected.value;
+  const apiUrl = selected.url;
+  const keyPrompt = selected.prompt;
+
+  if (keyName === "SUME_API_KEY") {
+    log(`${c("green", "✓")} Using SUME API (free)`);
+  } else {
+    log(`Using FAL API`);
+  }
+
+  log(`\n${c("cyan", "→")} Get your key from: ${c("bright", apiUrl)}`);
+
+  const openIt = await askYesNo("Open API portal in browser?", true);
+
+  if (openIt) {
     logInfo("Opening browser...");
-    if (!openBrowser(FAL_URL)) {
+    if (!openBrowser(apiUrl)) {
       logWarn("Could not open browser automatically");
-      logInfo(`Please visit: ${FAL_URL}`);
+      logInfo(`Please visit: ${apiUrl}`);
     }
   }
 
   log("");
-  const falKey = await ask(rl, "Enter your FAL_KEY: ");
+  const apiKey = await ask(rl, keyPrompt);
 
-  if (!falKey) {
-    logError("FAL_KEY is required!");
+  if (!apiKey) {
+    logError(`${keyName} is required!`);
     return null;
   }
 
   // Basic validation
-  if (falKey.length < 10) {
+  if (apiKey.length < 10) {
     logWarn("That key looks too short. Make sure you copied the full key.");
   }
 
   logSuccess("API key received");
-  return falKey;
+  return { keyName, apiKey };
 }
 
 // Install skill files
@@ -287,10 +516,20 @@ async function installSkill() {
 }
 
 // Update OpenClaw config
-async function updateOpenClawConfig(falKey) {
+async function updateOpenClawConfig(keyName, apiKey) {
   logStep("4/7", "Updating OpenClaw configuration...");
 
   let config = readJsonFile(OPENCLAW_CONFIG) || {};
+
+  // Build environment variables object based on key type
+  const envVars = {
+    [keyName]: apiKey,
+  };
+
+  // For backwards compatibility, also set FAL_KEY if using SUME_API_KEY
+  if (keyName === "SUME_API_KEY") {
+    envVars.FAL_KEY = apiKey;
+  }
 
   // Merge skill configuration
   const skillConfig = {
@@ -298,10 +537,9 @@ async function updateOpenClawConfig(falKey) {
       entries: {
         [SKILL_NAME]: {
           enabled: true,
-          apiKey: falKey,
-          env: {
-            FAL_KEY: falKey,
-          },
+          apiKey: apiKey,
+          keyType: keyName,
+          env: envVars,
         },
       },
     },
@@ -322,6 +560,7 @@ async function updateOpenClawConfig(falKey) {
 
   writeJsonFile(OPENCLAW_CONFIG, config);
   logSuccess(`Updated: ${OPENCLAW_CONFIG}`);
+  logInfo(`Key type: ${keyName}`);
 
   return true;
 }
@@ -368,30 +607,26 @@ async function injectPersona(rl) {
   // If Clawra content already exists, ask to update
   if (hasClawraContent) {
     logWarn("Clawra persona already exists in SOUL.md");
-    const update = await ask(rl, "Update Clawra persona? (y/N): ");
-    if (update.toLowerCase() !== "y") {
+    const update = await askYesNo("Update Clawra persona?", false);
+    if (!update) {
       logInfo("Keeping existing persona");
       return true;
     }
   }
 
   // Show options for SOUL.md configuration
-  console.log(`
-${c("cyan", "Choose SOUL.md configuration:")}
+  const options = [
+    {
+      label: `${c("green", "Replace with complete Clawra persona")} ${c("dim", "(recommended)")}`
+    },
+    {
+      label: "Append Clawra's persona to pre-existing soul.md"
+    }
+  ];
 
-${c("bright", "1)")} ${c("green", "Replace with complete Clawra persona")} ${c("dim", "(recommended)")}
-   - Full personality, backstory, and capabilities
-   - Replaces existing SOUL.md completely
+  const selectedIndex = await selectOption(options, 0, "Choose SOUL.md configuration:");
 
-${c("bright", "2)")} Append selfie capability only
-   - Adds only the selfie feature to existing SOUL.md
-   - Preserves your current configuration
-`);
-
-  const choice = await ask(rl, "Select option (1 or 2) [1]: ");
-  const option = choice.trim() || "1";
-
-  if (option === "1") {
+  if (selectedIndex === 0) {
     // Option 1: Replace with complete SOUL.md
     if (fs.existsSync(completePath)) {
       const completeContent = fs.readFileSync(completePath, "utf8");
@@ -401,16 +636,9 @@ ${c("bright", "2)")} Append selfie capability only
       logError("Complete template not found, falling back to append mode");
       return appendPersona(rl, injectionPath, hasClawraContent, currentSoul);
     }
-  } else if (option === "2") {
-    // Option 2: Append selfie section only
-    return appendPersona(rl, injectionPath, hasClawraContent, currentSoul);
   } else {
-    logWarn("Invalid option, using recommended (1)");
-    if (fs.existsSync(completePath)) {
-      const completeContent = fs.readFileSync(completePath, "utf8");
-      fs.writeFileSync(SOUL_MD, completeContent);
-      logSuccess(`Replaced SOUL.md with complete Clawra persona`);
-    }
+    // Option 2: Append Clawra's persona to pre-existing soul.md
+    return appendPersona(rl, injectionPath, hasClawraContent, currentSoul);
   }
 
   return true;
@@ -500,10 +728,10 @@ ${c("dim", "Your agent now has selfie superpowers!")}
 }
 
 // Handle reinstall
-async function handleReinstall(rl, falKey) {
-  const reinstall = await ask(rl, "\nReinstall/update? (y/N): ");
+async function handleReinstall() {
+  const reinstall = await askYesNo("Reinstall/update?", true);
 
-  if (reinstall.toLowerCase() !== "y") {
+  if (!reinstall) {
     log("\nNo changes made. Goodbye!");
     return false;
   }
@@ -531,16 +759,16 @@ async function main() {
     }
 
     if (prereqResult === "already_installed") {
-      const shouldContinue = await handleReinstall(rl, null);
+      const shouldContinue = await handleReinstall();
       if (!shouldContinue) {
         rl.close();
         process.exit(0);
       }
     }
 
-    // Step 2: Get FAL API key
-    const falKey = await getFalApiKey(rl);
-    if (!falKey) {
+    // Step 2: Get API key (SUME or FAL)
+    const apiKeyResult = await getApiKey(rl);
+    if (!apiKeyResult) {
       rl.close();
       process.exit(1);
     }
@@ -549,7 +777,7 @@ async function main() {
     await installSkill();
 
     // Step 4: Update OpenClaw config
-    await updateOpenClawConfig(falKey);
+    await updateOpenClawConfig(apiKeyResult.keyName, apiKeyResult.apiKey);
 
     // Step 5: Write IDENTITY.md
     await writeIdentity();

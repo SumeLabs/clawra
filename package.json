@@ -1,6 +1,6 @@
 {
-  "name": "clawra",
-  "version": "1.1.1",
+  "name": "clawra-test",
+  "version": "1.2.0",
   "description": "Add selfie superpowers to your OpenClaw agent using xAI Grok Imagine",
   "bin": {
     "clawra": "./bin/cli.js"
