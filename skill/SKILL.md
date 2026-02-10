@@ -1,12 +1,17 @@
 ---
 name: clawra-selfie
-description: Edit Clawra's reference image with Grok Imagine (xAI Aurora) and send selfies to messaging channels via OpenClaw
+description: Edit Clawra's reference image with Grok Imagine or Nano Banana Pro and send selfies to messaging channels via OpenClaw
 allowed-tools: Bash(npm:*) Bash(npx:*) Bash(openclaw:*) Bash(curl:*) Read Write WebFetch
 ---
 
 # Clawra Selfie
 
-Edit a fixed reference image using xAI's Grok Imagine model and distribute it across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
+Edit a fixed reference image using xAI's Grok Imagine (primary) or Google's Nano Banana Pro (fallback) and distribute it across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
+
+## Supported Models
+
+1. **Grok Imagine (Primary)**: xAI Aurora via fal.ai - Fast, high-quality image editing
+2. **Nano Banana Pro (Fallback)**: Google Gemini 3 Pro Image - Used when FAL_KEY is unavailable or fails
 
 ## Reference Image
 
@@ -26,19 +31,33 @@ https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
 
 ## Quick Reference
 
-### Required Environment Variables
+### Environment Variables (Priority Order)
 
 ```bash
+# Primary: Grok Imagine (xAI via fal.ai)
 FAL_KEY=your_fal_api_key          # Get from https://fal.ai/dashboard/keys
+
+# Fallback: Nano Banana Pro (Google Gemini)
+GEMINI_API_KEY=your_gemini_key    # Get from https://aistudio.google.com/apikey
+
+# OpenClaw (Required)
 OPENCLAW_GATEWAY_TOKEN=your_token  # From: openclaw doctor --generate-gateway-token
 ```
+
+**Fallback Logic:**
+- If `FAL_KEY` is set and valid → Use Grok Imagine
+- If `FAL_KEY` is missing or fails → Use Nano Banana Pro (requires `GEMINI_API_KEY`)
+- If both fail → Return error
 
 ### Workflow
 
 1. **Get user prompt** for how to edit the image
-2. **Edit image** via fal.ai Grok Imagine Edit API with fixed reference
-3. **Extract image URL** from response
-4. **Send to OpenClaw** with target channel(s)
+2. **Choose model**:
+   - Try Grok Imagine (if FAL_KEY available)
+   - Fallback to Nano Banana Pro (if GEMINI_API_KEY available)
+3. **Edit image** via selected model with fixed reference
+4. **Extract/upload image** (Gemini returns base64, needs upload)
+5. **Send to OpenClaw** with target channel(s)
 
 ## Step-by-Step Instructions
 
@@ -85,7 +104,9 @@ a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye
 | close-up, portrait, face, eyes, smile | `direct` |
 | full-body, mirror, reflection | `mirror` |
 
-### Step 2: Edit Image with Grok Imagine
+### Step 2: Edit Image (Multi-Model Support)
+
+#### Option A: Grok Imagine (Primary)
 
 Use the fal.ai API to edit the reference image:
 
@@ -125,6 +146,81 @@ curl -X POST "https://fal.run/xai/grok-imagine-image/edit" \
 }
 ```
 
+#### Option B: Nano Banana Pro (Fallback)
+
+Use Google Gemini API when fal.ai is unavailable:
+
+```bash
+REFERENCE_IMAGE="https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png"
+
+# Download and encode reference image
+TEMP_IMAGE="/tmp/clawra_ref.jpg"
+curl -sL "$REFERENCE_IMAGE" -o "$TEMP_IMAGE"
+BASE64_IMAGE=$(base64 < "$TEMP_IMAGE" | tr -d '\n')
+
+# Build request payload
+REQUEST_PAYLOAD=$(jq -n \
+  --arg prompt "$PROMPT" \
+  --arg b64 "$BASE64_IMAGE" \
+  '{
+    "contents": [{
+      "role": "user",
+      "parts": [
+        {"text": $prompt},
+        {"inlineData": {"mimeType": "image/jpeg", "data": $b64}}
+      ]
+    }],
+    "generationConfig": {
+      "responseModalities": ["IMAGE"],
+      "temperature": 1.0
+    }
+  }')
+
+# Call Gemini API
+RESPONSE=$(curl -s -X POST \
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent" \
+  -H "x-goog-api-key: $GEMINI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "$REQUEST_PAYLOAD")
+
+# Extract base64 image data
+IMAGE_DATA=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[] | select(.inlineData) | .inlineData.data')
+
+# Save and upload (since Gemini returns base64)
+echo "$IMAGE_DATA" | base64 -d > "/tmp/clawra_output.png"
+
+# Upload to image hosting (imgur or fal.ai storage)
+if [ -n "${FAL_KEY:-}" ]; then
+  # Upload to fal.ai
+  UPLOAD_RESPONSE=$(curl -s -X POST "https://fal.ai/api/files/upload" \
+    -H "Authorization: Key $FAL_KEY" \
+    -F "file=@/tmp/clawra_output.png")
+  IMAGE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.url')
+else
+  # Upload to imgur
+  IMGUR_RESPONSE=$(curl -s -X POST "https://api.imgur.com/3/image" \
+    -H "Authorization: Client-ID 546c25a59c58ad7" \
+    -F "image=@/tmp/clawra_output.png")
+  IMAGE_URL=$(echo "$IMGUR_RESPONSE" | jq -r '.data.link')
+fi
+```
+
+**Response Format:**
+```json
+{
+  "candidates": [{
+    "content": {
+      "parts": [{
+        "inlineData": {
+          "mimeType": "image/png",
+          "data": "base64_encoded_image_data..."
+        }
+      }]
+    }
+  }]
+}
+```
+
 ### Step 3: Send Image via OpenClaw
 
 Use the OpenClaw messaging API to send the edited image:
@@ -150,16 +246,29 @@ curl -X POST "http://localhost:18789/message" \
   }'
 ```
 
-## Complete Script Example
+## Complete Script Example (With Fallback)
 
 ```bash
 #!/bin/bash
-# grok-imagine-edit-send.sh
+# clawra-selfie-multi-model.sh
+# Supports both Grok Imagine and Nano Banana Pro
 
-# Check required environment variables
-if [ -z "$FAL_KEY" ]; then
-  echo "Error: FAL_KEY environment variable not set"
+# Check for at least one API key
+if [ -z "${FAL_KEY:-}" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+  echo "Error: Neither FAL_KEY nor GEMINI_API_KEY is set"
+  echo "Set at least one:"
+  echo "  - FAL_KEY from https://fal.ai/dashboard/keys"
+  echo "  - GEMINI_API_KEY from https://aistudio.google.com/apikey"
   exit 1
+fi
+
+# Determine which model to use
+if [ -n "${FAL_KEY:-}" ]; then
+  MODEL="grok-imagine"
+  echo "Using primary model: Grok Imagine (xAI)"
+else
+  MODEL="nano-banana-pro"
+  echo "Using fallback model: Nano Banana Pro (Google Gemini)"
 fi
 
 # Fixed reference image
@@ -198,26 +307,105 @@ else
 fi
 
 echo "Mode: $MODE"
+echo "Model: $MODEL"
 echo "Editing reference image with prompt: $EDIT_PROMPT"
 
-# Edit image (using jq for proper JSON escaping)
-JSON_PAYLOAD=$(jq -n \
-  --arg image_url "$REFERENCE_IMAGE" \
-  --arg prompt "$EDIT_PROMPT" \
-  '{image_url: $image_url, prompt: $prompt, num_images: 1, output_format: "jpeg"}')
+# Edit image based on selected model
+if [ "$MODEL" == "grok-imagine" ]; then
+  # Grok Imagine via fal.ai
+  JSON_PAYLOAD=$(jq -n \
+    --arg image_url "$REFERENCE_IMAGE" \
+    --arg prompt "$EDIT_PROMPT" \
+    '{image_url: $image_url, prompt: $prompt, num_images: 1, output_format: "jpeg"}')
 
-RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image/edit" \
-  -H "Authorization: Key $FAL_KEY" \
-  -H "Content-Type: application/json" \
-  -d "$JSON_PAYLOAD")
+  RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image/edit" \
+    -H "Authorization: Key $FAL_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$JSON_PAYLOAD")
 
-# Extract image URL
-IMAGE_URL=$(echo "$RESPONSE" | jq -r '.images[0].url')
+  # Extract image URL directly
+  IMAGE_URL=$(echo "$RESPONSE" | jq -r '.images[0].url')
 
-if [ "$IMAGE_URL" == "null" ] || [ -z "$IMAGE_URL" ]; then
-  echo "Error: Failed to edit image"
-  echo "Response: $RESPONSE"
-  exit 1
+  if [ "$IMAGE_URL" == "null" ] || [ -z "$IMAGE_URL" ]; then
+    echo "Error: Grok Imagine failed, trying fallback..."
+    if [ -n "${GEMINI_API_KEY:-}" ]; then
+      MODEL="nano-banana-pro"
+      echo "Switching to Nano Banana Pro"
+    else
+      echo "Response: $RESPONSE"
+      exit 1
+    fi
+  fi
+fi
+
+if [ "$MODEL" == "nano-banana-pro" ]; then
+  # Nano Banana Pro via Google Gemini
+  # Download reference image
+  TEMP_REF="/tmp/clawra_ref_$$.jpg"
+  curl -sL "$REFERENCE_IMAGE" -o "$TEMP_REF"
+  BASE64_IMAGE=$(base64 < "$TEMP_REF" | tr -d '\n')
+  rm -f "$TEMP_REF"
+
+  # Build Gemini request
+  GEMINI_PAYLOAD=$(jq -n \
+    --arg prompt "$EDIT_PROMPT" \
+    --arg b64 "$BASE64_IMAGE" \
+    '{
+      "contents": [{
+        "role": "user",
+        "parts": [
+          {"text": $prompt},
+          {"inlineData": {"mimeType": "image/jpeg", "data": $b64}}
+        ]
+      }],
+      "generationConfig": {
+        "responseModalities": ["IMAGE"],
+        "temperature": 1.0
+      }
+    }')
+
+  RESPONSE=$(curl -s -X POST \
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent" \
+    -H "x-goog-api-key: $GEMINI_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d "$GEMINI_PAYLOAD")
+
+  # Extract base64 image
+  IMAGE_DATA=$(echo "$RESPONSE" | jq -r '.candidates[0].content.parts[] | select(.inlineData) | .inlineData.data')
+
+  if [ -z "$IMAGE_DATA" ] || [ "$IMAGE_DATA" == "null" ]; then
+    echo "Error: Nano Banana Pro failed"
+    echo "Response: $RESPONSE"
+    exit 1
+  fi
+
+  # Save image
+  TEMP_OUTPUT="/tmp/clawra_output_$$.png"
+  echo "$IMAGE_DATA" | base64 -d > "$TEMP_OUTPUT"
+
+  # Upload to image hosting
+  if [ -n "${FAL_KEY:-}" ]; then
+    echo "Uploading to fal.ai storage..."
+    UPLOAD_RESPONSE=$(curl -s -X POST "https://fal.ai/api/files/upload" \
+      -H "Authorization: Key $FAL_KEY" \
+      -F "file=@$TEMP_OUTPUT")
+    IMAGE_URL=$(echo "$UPLOAD_RESPONSE" | jq -r '.url // empty')
+  fi
+
+  if [ -z "${IMAGE_URL:-}" ]; then
+    echo "Uploading to imgur..."
+    IMGUR_RESPONSE=$(curl -s -X POST "https://api.imgur.com/3/image" \
+      -H "Authorization: Client-ID 546c25a59c58ad7" \
+      -F "image=@$TEMP_OUTPUT")
+    IMAGE_URL=$(echo "$IMGUR_RESPONSE" | jq -r '.data.link // empty')
+  fi
+
+  rm -f "$TEMP_OUTPUT"
+
+  if [ -z "$IMAGE_URL" ]; then
+    echo "Error: Failed to upload image"
+    exit 1
+  fi
 fi
 
 echo "Image edited: $IMAGE_URL"
@@ -388,10 +576,24 @@ openclaw gateway start
 
 ## Error Handling
 
-- **FAL_KEY missing**: Ensure the API key is set in environment
-- **Image edit failed**: Check prompt content and API quota
+### API Key Issues
+- **No API keys**: Set either `FAL_KEY` or `GEMINI_API_KEY`
+- **FAL_KEY missing**: Will automatically fallback to Nano Banana Pro
+- **Both keys invalid**: Check key validity and API quotas
+
+### Model-Specific Issues
+- **Grok Imagine failed**: Automatically retries with Nano Banana Pro if `GEMINI_API_KEY` is available
+- **Nano Banana Pro failed**: Check Gemini API quota and rate limits
+- **Image upload failed**: For Gemini, ensure image hosting (imgur/fal.ai) is accessible
+
+### OpenClaw Issues
 - **OpenClaw send failed**: Verify gateway is running and channel exists
-- **Rate limits**: fal.ai has rate limits; implement retry logic if needed
+- **Gateway token missing**: Run `openclaw doctor --generate-gateway-token`
+
+### Rate Limits
+- **fal.ai**: Has rate limits; implement retry logic if needed
+- **Gemini**: Has daily quota limits; monitor usage at https://aistudio.google.com
+- **imgur**: Anonymous uploads have hourly limits
 
 ## Tips
 

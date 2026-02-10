@@ -21,6 +21,19 @@ Clawra Selfie enables your OpenClaw agent to:
 - **Generate selfies** using a consistent reference image
 - **Send photos** across all messaging platforms (Discord, Telegram, WhatsApp, etc.)
 - **Respond visually** to "what are you doing?" and "send a pic" requests
+- **Dual model support** with automatic fallback for reliability
+
+### Supported Models
+
+| Model | Provider | Speed | Quality | Fallback |
+|-------|----------|-------|---------|----------|
+| **Grok Imagine** | xAI via fal.ai | ⚡ Fast | ⭐⭐⭐⭐⭐ | Primary |
+| **Nano Banana Pro** | Google Gemini | 🐢 Moderate | ⭐⭐⭐⭐ | Auto fallback |
+
+**How it works:**
+- If `FAL_KEY` is available → Uses Grok Imagine (fast, high-quality)
+- If Grok Imagine fails or unavailable → Automatically switches to Nano Banana Pro
+- At least one API key required
 
 ### Selfie Modes
 
@@ -32,15 +45,27 @@ Clawra Selfie enables your OpenClaw agent to:
 ## Prerequisites
 
 - [OpenClaw](https://github.com/openclaw/openclaw) installed and configured
-- [fal.ai](https://fal.ai) account (free tier available)
+- **At least one** API key:
+  - [fal.ai](https://fal.ai/dashboard/keys) account (recommended for primary)
+  - [Google AI Studio](https://aistudio.google.com/apikey) account (fallback/alternative)
 
 ## Manual Installation
 
 If you prefer manual setup:
 
-### 1. Get API Key
+### 1. Get API Keys
 
-Visit [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) and create an API key.
+Choose one or both (recommended for redundancy):
+
+**Primary: Grok Imagine (xAI)**
+- Visit [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys)
+- Create an API key
+- Fast, high-quality image generation
+
+**Fallback: Nano Banana Pro (Google)**
+- Visit [Google AI Studio](https://aistudio.google.com/apikey)
+- Create an API key
+- Automatic fallback when fal.ai is unavailable
 
 ### 2. Clone the Skill
 
@@ -59,13 +84,16 @@ Add to `~/.openclaw/openclaw.json`:
       "clawra-selfie": {
         "enabled": true,
         "env": {
-          "FAL_KEY": "your_fal_key_here"
+          "FAL_KEY": "your_fal_key_here",
+          "GEMINI_API_KEY": "your_gemini_key_here"
         }
       }
     }
   }
 }
 ```
+
+**Note:** You can configure one or both keys. At least one is required.
 
 ### 4. Update SOUL.md
 
@@ -101,9 +129,13 @@ This ensures consistent appearance across all generated images.
 
 ## Technical Details
 
-- **Image Generation**: xAI Grok Imagine via fal.ai
+- **Image Generation**:
+  - Primary: xAI Grok Imagine via fal.ai
+  - Fallback: Google Gemini 3 Pro Image (Nano Banana Pro)
 - **Messaging**: OpenClaw Gateway API
 - **Supported Platforms**: Discord, Telegram, WhatsApp, Slack, Signal, MS Teams
+- **Fallback Strategy**: Automatic model switching on failure
+- **Image Upload**: fal.ai storage (primary) or imgur (fallback)
 
 ## Project Structure
 
