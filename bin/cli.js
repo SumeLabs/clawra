@@ -170,7 +170,7 @@ ${c("magenta", "│")}  ${c("bright", "Clawra Selfie")} - OpenClaw Skill Install
 ${c("magenta", "└─────────────────────────────────────────┘")}
 
 Add selfie generation superpowers to your OpenClaw agent!
-Uses ${c("cyan", "xAI Grok Imagine")} via ${c("cyan", "fal.ai")} for image editing.
+Supports ${c("cyan", "xAI Grok Imagine")} (primary) and ${c("cyan", "Google Gemini")} (fallback).
 `);
 }
 
@@ -207,40 +207,103 @@ async function checkPrerequisites() {
   return true;
 }
 
-// Get FAL API key
-async function getFalApiKey(rl) {
-  logStep("2/7", "Setting up fal.ai API key...");
+// Get API keys (FAL primary, Gemini fallback)
+async function getApiKeys(rl) {
+  logStep("2/7", "Setting up API keys...");
 
   const FAL_URL = "https://fal.ai/dashboard/keys";
+  const GEMINI_URL = "https://aistudio.google.com/apikey";
 
-  log(`\nTo use Grok Imagine, you need a fal.ai API key.`);
-  log(`${c("cyan", "→")} Get your key from: ${c("bright", FAL_URL)}\n`);
+  log(`\n${c("bright", "API Key Setup")}`);  
+  log(`This skill supports two image generation models:\n`);
+  log(`  ${c("green", "1. Grok Imagine (Primary)")} - xAI via fal.ai`);
+  log(`     Fast, high-quality image editing`);
+  log(`     Get key: ${c("cyan", FAL_URL)}\n`);
+  log(`  ${c("yellow", "2. Nano Banana Pro (Fallback)")} - Google Gemini`);
+  log(`     Used when fal.ai is unavailable`);
+  log(`     Get key: ${c("cyan", GEMINI_URL)}\n`);
+  log(`${c("dim", "You can configure one or both keys. At least one is required.")}\n`);
 
-  const openIt = await ask(rl, "Open fal.ai in browser? (Y/n): ");
+  // Ask for FAL key first
+  log(`${c("cyan", "→")} ${c("bright", "Primary: fal.ai API Key")}`);
+  const setupFal = await ask(rl, "Configure fal.ai API key? (Y/n): ");
 
-  if (openIt.toLowerCase() !== "n") {
-    logInfo("Opening browser...");
-    if (!openBrowser(FAL_URL)) {
-      logWarn("Could not open browser automatically");
-      logInfo(`Please visit: ${FAL_URL}`);
+  let falKey = null;
+  if (setupFal.toLowerCase() !== "n") {
+    const openFal = await ask(rl, "  Open fal.ai in browser? (Y/n): ");
+    if (openFal.toLowerCase() !== "n") {
+      logInfo("  Opening browser...");
+      if (!openBrowser(FAL_URL)) {
+        logWarn("  Could not open browser automatically");
+        logInfo(`  Please visit: ${FAL_URL}`);
+      }
+    }
+
+    log("");
+    falKey = await ask(rl, "  Enter your FAL_KEY (or press Enter to skip): ");
+
+    if (falKey && falKey.length < 10) {
+      logWarn("  That key looks too short. Make sure you copied the full key.");
+    }
+
+    if (falKey) {
+      logSuccess("  FAL_KEY configured");
+    } else {
+      logInfo("  Skipped fal.ai configuration");
     }
   }
 
+  // Ask for Gemini key
   log("");
-  const falKey = await ask(rl, "Enter your FAL_KEY: ");
+  log(`${c("cyan", "→")} ${c("bright", "Fallback: Google Gemini API Key")}`);
+  const setupGemini = await ask(rl, "Configure Gemini API key? (Y/n): ");
 
-  if (!falKey) {
-    logError("FAL_KEY is required!");
+  let geminiKey = null;
+  if (setupGemini.toLowerCase() !== "n") {
+    const openGemini = await ask(rl, "  Open Google AI Studio in browser? (Y/n): ");
+    if (openGemini.toLowerCase() !== "n") {
+      logInfo("  Opening browser...");
+      if (!openBrowser(GEMINI_URL)) {
+        logWarn("  Could not open browser automatically");
+        logInfo(`  Please visit: ${GEMINI_URL}`);
+      }
+    }
+
+    log("");
+    geminiKey = await ask(rl, "  Enter your GEMINI_API_KEY (or press Enter to skip): ");
+
+    if (geminiKey && geminiKey.length < 10) {
+      logWarn("  That key looks too short. Make sure you copied the full key.");
+    }
+
+    if (geminiKey) {
+      logSuccess("  GEMINI_API_KEY configured");
+    } else {
+      logInfo("  Skipped Gemini configuration");
+    }
+  }
+
+  // Validate at least one key is provided
+  if (!falKey && !geminiKey) {
+    logError("At least one API key is required!");
+    log(`\nPlease configure either:`);
+    log(`  - FAL_KEY from ${FAL_URL}`);
+    log(`  - GEMINI_API_KEY from ${GEMINI_URL}`);
     return null;
   }
 
-  // Basic validation
-  if (falKey.length < 10) {
-    logWarn("That key looks too short. Make sure you copied the full key.");
+  log("");
+  if (falKey && geminiKey) {
+    logSuccess("Both API keys configured - full redundancy enabled!");
+  } else if (falKey) {
+    logSuccess("Using Grok Imagine (fal.ai) as primary model");
+    logInfo("Consider adding GEMINI_API_KEY later for fallback support");
+  } else {
+    logSuccess("Using Nano Banana Pro (Google Gemini) as primary model");
+    logInfo("Consider adding FAL_KEY later for faster image generation");
   }
 
-  logSuccess("API key received");
-  return falKey;
+  return { falKey, geminiKey };
 }
 
 // Install skill files
@@ -287,10 +350,19 @@ async function installSkill() {
 }
 
 // Update OpenClaw config
-async function updateOpenClawConfig(falKey) {
+async function updateOpenClawConfig(apiKeys) {
   logStep("4/7", "Updating OpenClaw configuration...");
 
   let config = readJsonFile(OPENCLAW_CONFIG) || {};
+
+  // Build env object with available keys
+  const env = {};
+  if (apiKeys.falKey) {
+    env.FAL_KEY = apiKeys.falKey;
+  }
+  if (apiKeys.geminiKey) {
+    env.GEMINI_API_KEY = apiKeys.geminiKey;
+  }
 
   // Merge skill configuration
   const skillConfig = {
@@ -298,10 +370,8 @@ async function updateOpenClawConfig(falKey) {
       entries: {
         [SKILL_NAME]: {
           enabled: true,
-          apiKey: falKey,
-          env: {
-            FAL_KEY: falKey,
-          },
+          apiKey: apiKeys.falKey || apiKeys.geminiKey, // For backward compatibility
+          env: env,
         },
       },
     },
@@ -447,7 +517,7 @@ ${c("dim", "Your agent now has selfie superpowers!")}
 }
 
 // Handle reinstall
-async function handleReinstall(rl, falKey) {
+async function handleReinstall(rl) {
   const reinstall = await ask(rl, "\nReinstall/update? (y/N): ");
 
   if (reinstall.toLowerCase() !== "y") {
@@ -478,16 +548,16 @@ async function main() {
     }
 
     if (prereqResult === "already_installed") {
-      const shouldContinue = await handleReinstall(rl, null);
+      const shouldContinue = await handleReinstall(rl);
       if (!shouldContinue) {
         rl.close();
         process.exit(0);
       }
     }
 
-    // Step 2: Get FAL API key
-    const falKey = await getFalApiKey(rl);
-    if (!falKey) {
+    // Step 2: Get API keys
+    const apiKeys = await getApiKeys(rl);
+    if (!apiKeys) {
       rl.close();
       process.exit(1);
     }
@@ -496,7 +566,7 @@ async function main() {
     await installSkill();
 
     // Step 4: Update OpenClaw config
-    await updateOpenClawConfig(falKey);
+    await updateOpenClawConfig(apiKeys);
 
     // Step 5: Write IDENTITY.md
     await writeIdentity();
