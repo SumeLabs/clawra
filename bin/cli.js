@@ -392,6 +392,37 @@ Be playful and creative with your visual presence!
   return true;
 }
 
+// Offer optional voice calling setup
+async function offerVoiceCalling(rl) {
+  log("");
+  const wantVoice = await ask(
+    rl,
+    `${c("cyan", "Would you also like to add voice calling? (optional)")} (y/N): `
+  );
+
+  if (wantVoice.toLowerCase() !== "y") {
+    logInfo("Skipping voice setup. You can add it later.");
+    return;
+  }
+
+  log("");
+  logInfo("Voice calling is powered by ClawdTalk (Telnyx).");
+  log("");
+  log(`  ${c("bright", "1.")} Sign up at ${c("cyan", "https://clawdtalk.com")}`);
+  log(`  ${c("bright", "2.")} Install the skill:`);
+  log(`     ${c("dim", "clawdhub install clawdtalk-client")}`);
+  log(`     ${c("dim", "or: git clone https://github.com/team-telnyx/clawdtalk-client ~/.openclaw/skills/clawdtalk-client")}`);
+  log(`  ${c("bright", "3.")} Run setup: ${c("dim", "cd ~/.openclaw/skills/clawdtalk-client && ./setup.sh")}`);
+  log(`  ${c("bright", "4.")} Start connection: ${c("dim", "./scripts/connect.sh start")}`);
+  log("");
+  logInfo("Once set up, you can call Clawra from any phone!");
+
+  const openIt = await ask(rl, "Open clawdtalk.com in browser? (Y/n): ");
+  if (openIt.toLowerCase() !== "n") {
+    openBrowser("https://clawdtalk.com");
+  }
+}
+
 // Final summary
 function printSummary() {
   logStep("6/6", "Installation complete!");
@@ -416,6 +447,7 @@ ${c("yellow", "Try saying to your agent:")}
   "What are you doing right now?"
 
 ${c("dim", "Your agent now has selfie superpowers!")}
+${c("dim", "Add voice calling with ClawdTalk: https://clawdtalk.com")}
 `);
 }
 
@@ -473,6 +505,9 @@ async function main() {
 
     // Step 5: Inject persona
     await injectPersona(rl);
+
+    // Step 5.5: Optional voice calling
+    await offerVoiceCalling(rl);
 
     // Step 6: Summary
     printSummary();
