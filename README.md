@@ -10,7 +10,7 @@ npx clawra@latest
 
 This will:
 1. Check OpenClaw is installed
-2. Guide you to get a fal.ai API key
+2. Guide you to select image provider(s) and enter API key(s)
 3. Install the skill to `~/.openclaw/skills/clawra-selfie/`
 4. Configure OpenClaw to use the skill
 5. Add selfie capabilities to your agent's SOUL.md
@@ -29,10 +29,19 @@ Clawra Selfie enables your OpenClaw agent to:
 | **Mirror** | Full-body shots, outfits | wearing, outfit, fashion |
 | **Direct** | Close-ups, locations | cafe, beach, portrait, smile |
 
+## Supported Providers
+
+| Provider | Model | Env Variable | API Key URL |
+|----------|-------|-------------|-------------|
+| **fal** (default) | Grok Imagine via fal.ai | `FAL_KEY` | [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) |
+| **openai** | gpt-image-1 | `OPENAI_API_KEY` | [platform.openai.com/api-keys](https://platform.openai.com/api-keys) |
+| **google** | gemini-2.5-flash-image | `GEMINI_API_KEY` | [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| **xai** | grok-imagine-image (direct) | `XAI_API_KEY` | [console.x.ai](https://console.x.ai) |
+
 ## Prerequisites
 
 - [OpenClaw](https://github.com/openclaw/openclaw) installed and configured
-- [fal.ai](https://fal.ai) account (free tier available)
+- At least one provider API key (see table above)
 
 ## Manual Installation
 
@@ -40,7 +49,7 @@ If you prefer manual setup:
 
 ### 1. Get API Key
 
-Visit [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) and create an API key.
+Choose a provider and get its API key from the table above.
 
 ### 2. Clone the Skill
 
@@ -59,7 +68,38 @@ Add to `~/.openclaw/openclaw.json`:
       "clawra-selfie": {
         "enabled": true,
         "env": {
+          "IMAGE_PROVIDER": "fal",
           "FAL_KEY": "your_fal_key_here"
+        }
+      }
+    }
+  }
+}
+```
+
+Set `IMAGE_PROVIDER` to your chosen provider (`fal`, `openai`, `google`, or `xai`) and include the corresponding API key:
+
+| IMAGE_PROVIDER | Required Env Key |
+|---------------|-----------------|
+| `fal` | `FAL_KEY` |
+| `openai` | `OPENAI_API_KEY` |
+| `google` | `GEMINI_API_KEY` |
+| `xai` | `XAI_API_KEY` |
+
+You can configure multiple providers at once:
+
+```json
+{
+  "skills": {
+    "entries": {
+      "clawra-selfie": {
+        "enabled": true,
+        "env": {
+          "IMAGE_PROVIDER": "openai",
+          "FAL_KEY": "your_fal_key",
+          "OPENAI_API_KEY": "your_openai_key",
+          "GEMINI_API_KEY": "your_gemini_key",
+          "XAI_API_KEY": "your_xai_key"
         }
       }
     }
@@ -101,7 +141,8 @@ This ensures consistent appearance across all generated images.
 
 ## Technical Details
 
-- **Image Generation**: xAI Grok Imagine via fal.ai
+- **Image Generation**: Multiple providers (fal.ai, OpenAI, Google Gemini, x.ai)
+- **Provider Selection**: Via `IMAGE_PROVIDER` env variable
 - **Messaging**: OpenClaw Gateway API
 - **Supported Platforms**: Discord, Telegram, WhatsApp, Slack, Signal, MS Teams
 
@@ -110,13 +151,24 @@ This ensures consistent appearance across all generated images.
 ```
 clawra/
 ├── bin/
-│   └── cli.js           # npx installer
+│   └── cli.js              # npx installer (multi-provider)
+├── scripts/
+│   ├── providers/           # Provider abstraction layer
+│   │   ├── types.ts         # Shared interface
+│   │   ├── fal.ts           # fal.ai provider
+│   │   ├── openai.ts        # OpenAI provider
+│   │   ├── google.ts        # Google Gemini provider
+│   │   ├── xai.ts           # x.ai direct provider
+│   │   └── index.ts         # Factory function
+│   ├── clawra-selfie.ts     # TypeScript implementation
+│   └── clawra-selfie.sh     # Bash implementation
 ├── skill/
-│   ├── SKILL.md         # Skill definition
-│   ├── scripts/         # Generation scripts
-│   └── assets/          # Reference image
+│   ├── SKILL.md             # Skill definition
+│   ├── scripts/             # Generation scripts (copy)
+│   └── assets/              # Reference image
 ├── templates/
-│   └── soul-injection.md # Persona template
+│   └── soul-injection.md    # Persona template
+├── tsconfig.json
 └── package.json
 ```
 
