@@ -1,7 +1,7 @@
 {
   "name": "clawra",
   "version": "1.1.1",
-  "description": "Add selfie superpowers to your OpenClaw agent using xAI Grok Imagine",
+  "description": "Add selfie superpowers to your OpenClaw agent with multi-provider image generation (fal.ai, OpenAI, Google Gemini, x.ai)",
   "bin": {
     "clawra": "./bin/cli.js"
   },
@@ -20,6 +20,10 @@
     "xai",
     "aurora",
     "fal.ai",
+    "openai",
+    "gemini",
+    "google",
+    "imagen",
     "selfie",
     "ai-agent",
     "image-generation",

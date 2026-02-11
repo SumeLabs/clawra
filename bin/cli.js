@@ -162,15 +162,23 @@ function copyDir(src, dest) {
   }
 }
 
+// Provider definitions
+const PROVIDERS = {
+  fal: { name: "fal.ai (Grok Imagine)", envKey: "FAL_KEY", url: "https://fal.ai/dashboard/keys" },
+  openai: { name: "OpenAI (gpt-image-1)", envKey: "OPENAI_API_KEY", url: "https://platform.openai.com/api-keys" },
+  google: { name: "Google Gemini", envKey: "GEMINI_API_KEY", url: "https://aistudio.google.com/apikey" },
+  xai: { name: "x.ai (Grok Imagine)", envKey: "XAI_API_KEY", url: "https://console.x.ai" },
+};
+
 // Print banner
 function printBanner() {
   console.log(`
-${c("magenta", "┌─────────────────────────────────────────┐")}
-${c("magenta", "│")}  ${c("bright", "Clawra Selfie")} - OpenClaw Skill Installer ${c("magenta", "│")}
-${c("magenta", "└─────────────────────────────────────────┘")}
+${c("magenta", "┌──────────────────────────────────────────────────────┐")}
+${c("magenta", "│")}  ${c("bright", "Clawra Selfie")} - Multi-Provider Skill Installer   ${c("magenta", "│")}
+${c("magenta", "└──────────────────────────────────────────────────────┘")}
 
 Add selfie generation superpowers to your OpenClaw agent!
-Uses ${c("cyan", "xAI Grok Imagine")} via ${c("cyan", "fal.ai")} for image editing.
+Supported providers: ${c("cyan", "fal.ai")}, ${c("cyan", "OpenAI")}, ${c("cyan", "Google Gemini")}, ${c("cyan", "x.ai")}
 `);
 }
 
@@ -207,40 +215,75 @@ async function checkPrerequisites() {
   return true;
 }
 
-// Get FAL API key
-async function getFalApiKey(rl) {
-  logStep("2/7", "Setting up fal.ai API key...");
+// Get API keys for selected providers
+async function getApiKeys(rl) {
+  logStep("2/7", "Setting up image provider API keys...");
 
-  const FAL_URL = "https://fal.ai/dashboard/keys";
+  log(`\nWhich image providers would you like to configure?`);
+  log(`You need at least one provider. You can add more later.\n`);
 
-  log(`\nTo use Grok Imagine, you need a fal.ai API key.`);
-  log(`${c("cyan", "→")} Get your key from: ${c("bright", FAL_URL)}\n`);
+  const providerIds = Object.keys(PROVIDERS);
+  for (let i = 0; i < providerIds.length; i++) {
+    const id = providerIds[i];
+    const p = PROVIDERS[id];
+    log(`  ${c("cyan", `${i + 1})`)} ${p.name} (${c("dim", p.envKey)})`);
+  }
+  log("");
 
-  const openIt = await ask(rl, "Open fal.ai in browser? (Y/n): ");
+  const selection = await ask(
+    rl,
+    `Enter provider numbers (comma-separated, default: 1): `
+  );
 
-  if (openIt.toLowerCase() !== "n") {
-    logInfo("Opening browser...");
-    if (!openBrowser(FAL_URL)) {
-      logWarn("Could not open browser automatically");
-      logInfo(`Please visit: ${FAL_URL}`);
-    }
+  const selectedNums = (selection || "1")
+    .split(",")
+    .map((s) => parseInt(s.trim(), 10) - 1)
+    .filter((n) => n >= 0 && n < providerIds.length);
+
+  if (selectedNums.length === 0) {
+    selectedNums.push(0); // default to fal
   }
 
-  log("");
-  const falKey = await ask(rl, "Enter your FAL_KEY: ");
+  const apiKeys = {};
 
-  if (!falKey) {
-    logError("FAL_KEY is required!");
+  for (const idx of selectedNums) {
+    const id = providerIds[idx];
+    const p = PROVIDERS[id];
+
+    log(`\n${c("bright", `Setting up ${p.name}...`)}`);
+    log(`${c("cyan", "→")} Get your key from: ${c("bright", p.url)}\n`);
+
+    const openIt = await ask(rl, `Open ${p.name} in browser? (Y/n): `);
+    if (openIt.toLowerCase() !== "n") {
+      logInfo("Opening browser...");
+      if (!openBrowser(p.url)) {
+        logWarn("Could not open browser automatically");
+        logInfo(`Please visit: ${p.url}`);
+      }
+    }
+
+    log("");
+    const key = await ask(rl, `Enter your ${p.envKey}: `);
+
+    if (!key) {
+      logWarn(`Skipping ${p.name} (no key provided)`);
+      continue;
+    }
+
+    if (key.length < 10) {
+      logWarn("That key looks too short. Make sure you copied the full key.");
+    }
+
+    apiKeys[id] = key;
+    logSuccess(`${p.name} API key received`);
+  }
+
+  if (Object.keys(apiKeys).length === 0) {
+    logError("At least one API key is required!");
     return null;
   }
 
-  // Basic validation
-  if (falKey.length < 10) {
-    logWarn("That key looks too short. Make sure you copied the full key.");
-  }
-
-  logSuccess("API key received");
-  return falKey;
+  return apiKeys;
 }
 
 // Install skill files
@@ -287,10 +330,23 @@ async function installSkill() {
 }
 
 // Update OpenClaw config
-async function updateOpenClawConfig(falKey) {
+async function updateOpenClawConfig(apiKeys) {
   logStep("4/7", "Updating OpenClaw configuration...");
 
   let config = readJsonFile(OPENCLAW_CONFIG) || {};
+
+  // Build env vars from all configured providers
+  const env = {};
+  for (const [providerId, key] of Object.entries(apiKeys)) {
+    const p = PROVIDERS[providerId];
+    if (p) {
+      env[p.envKey] = key;
+    }
+  }
+
+  // Set default provider to the first configured one
+  const defaultProvider = Object.keys(apiKeys)[0];
+  env.IMAGE_PROVIDER = defaultProvider;
 
   // Merge skill configuration
   const skillConfig = {
@@ -298,10 +354,7 @@ async function updateOpenClawConfig(falKey) {
       entries: {
         [SKILL_NAME]: {
           enabled: true,
-          apiKey: falKey,
-          env: {
-            FAL_KEY: falKey,
-          },
+          env,
         },
       },
     },
@@ -322,6 +375,11 @@ async function updateOpenClawConfig(falKey) {
 
   writeJsonFile(OPENCLAW_CONFIG, config);
   logSuccess(`Updated: ${OPENCLAW_CONFIG}`);
+  logInfo(`Default provider: ${PROVIDERS[defaultProvider].name}`);
+
+  for (const [providerId] of Object.entries(apiKeys)) {
+    logInfo(`Configured: ${PROVIDERS[providerId].name}`);
+  }
 
   return true;
 }
@@ -437,12 +495,15 @@ ${c("cyan", "Identity set:")}
 ${c("cyan", "Persona updated:")}
   ${SOUL_MD}
 
+${c("cyan", "Switch provider:")}
+  Set IMAGE_PROVIDER to: fal, openai, google, or xai
+
 ${c("yellow", "Try saying to your agent:")}
   "Send me a selfie"
   "Send a pic wearing a cowboy hat"
   "What are you doing right now?"
 
-${c("dim", "Your agent now has selfie superpowers!")}
+${c("dim", "Your agent now has multi-provider selfie superpowers!")}
 `);
 }
 
@@ -485,9 +546,9 @@ async function main() {
       }
     }
 
-    // Step 2: Get FAL API key
-    const falKey = await getFalApiKey(rl);
-    if (!falKey) {
+    // Step 2: Get API keys (multi-provider)
+    const apiKeys = await getApiKeys(rl);
+    if (!apiKeys) {
       rl.close();
       process.exit(1);
     }
@@ -496,7 +557,7 @@ async function main() {
     await installSkill();
 
     // Step 4: Update OpenClaw config
-    await updateOpenClawConfig(falKey);
+    await updateOpenClawConfig(apiKeys);
 
     // Step 5: Write IDENTITY.md
     await writeIdentity();
