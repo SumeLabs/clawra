@@ -45,7 +45,7 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gatewa
 ### Workflow
 
 1. **Get user prompt** for generation/editing context
-2. **Choose backend**: `qwen-image-plus` (default) / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
+2. **Choose backend**: `qwen-image-plus` (default) / `qwen-image-edit-plus` / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
 3. **Generate image** via selected backend
 4. **Send to OpenClaw** with target channel(s)
 
@@ -54,6 +54,7 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gatewa
 `scripts/clawra-selfie.sh` and `scripts/clawra-selfie.ts` support:
 
 - `qwen-image-plus` (default): calls Alibaba DashScope `qwen-image-plus-2026-01-09` (or override model)
+- `qwen-image-edit-plus`: calls Alibaba DashScope `qwen-image-edit-plus` for reference-image editing
 - `volc-seedream`/`seedream`: calls Volcengine Ark text-to-image (`/images/generations`)
 - `volc-seededit`/`seededit`: calls Volcengine Ark image edit (`/images/edits`) using Clawra reference image
 - `fal`: calls `xai/grok-imagine-image` on fal.ai (returns image URL)
@@ -185,6 +186,10 @@ Use `scripts/clawra-selfie.sh` (bash) or `scripts/clawra-selfie.ts` (TypeScript 
 # qwen-image-plus (default) — DASHSCOPE_API_KEY
 DASHSCOPE_API_KEY=*** \
   ./scripts/clawra-selfie.sh "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+
+# qwen-image-edit-plus (reference image edit) — DASHSCOPE_API_KEY
+DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
+  ./scripts/clawra-selfie.sh "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
 
 # volc-seedream (text-to-image) — ARK_API_KEY
 ARK_API_KEY=*** \

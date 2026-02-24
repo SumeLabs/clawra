@@ -39,7 +39,7 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gat
 ### 工作流程
 
 1. **获取用户提示词**：生成/编辑的上下文描述
-2. **选择后端**：`qwen-image-plus`（默认）/ `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
+2. **选择后端**：`qwen-image-plus`（默认）/ `qwen-image-edit-plus` / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
 3. **生成图片**：通过选定的后端生成
 4. **发送到 OpenClaw**：指定目标频道
 
@@ -48,6 +48,7 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gat
 `scripts/clawra-selfie.sh` 和 `scripts/clawra-selfie.ts` 支持：
 
 - `qwen-image-plus`（默认）：调用阿里巴巴 DashScope `qwen-image-plus-2026-01-09`（或覆盖模型）
+- `qwen-image-edit-plus`：调用阿里巴巴 DashScope `qwen-image-edit-plus` 做参考图编辑
 - `volc-seedream`/`seedream`：调用火山引擎 Ark 文生图（`/images/generations`）
 - `volc-seededit`/`seededit`：调用火山引擎 Ark 图片编辑（`/images/edits`），使用 Clawra 参考图片
 - `fal`：在 fal.ai 上调用 `xai/grok-imagine-image`（返回图片 URL）
@@ -188,6 +189,10 @@ curl -X POST "http://localhost:18789/message" \
 ```bash
 # 默认 backend（qwen-image-plus）
 ./scripts/clawra-selfie.sh "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+
+# qwen-image-edit-plus（参考图编辑）
+DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
+  ./scripts/clawra-selfie.sh "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
 
 # fal backend
 ./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"

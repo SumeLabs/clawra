@@ -21,6 +21,7 @@ This repository is an upgraded fork of the original Clawra project. The main goa
 | Backend | Purpose | Required Config |
 |---|---|---|
 | `qwen-image-plus` / `qwen` | Text-to-image (default) | `DASHSCOPE_API_KEY` |
+| `qwen-image-edit-plus` | Image edit with reference image (Qwen) | `DASHSCOPE_API_KEY` |
 | `volc-seedream` / `seedream` | Text-to-image | `ARK_API_KEY` |
 | `volc-seededit` / `seededit` | Image edit with reference image | `ARK_API_KEY` |
 | `hunyuan-image` / `hunyuan` | Tencent Hunyuan Image 3.0 (async job) | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
@@ -104,6 +105,8 @@ For Hunyuan backend, timeout is 120 seconds with 1-second polling intervals.
 ```bash
 # Qwen
 DASHSCOPE_API_KEY=your_key
+QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png  # optional, qwen-image-edit-plus reference image
+QWEN_IMAGE_EDIT_IMAGE_PATH=/path/to/input.png            # optional, takes precedence over URL
 
 # Volcengine
 ARK_API_KEY=your_key

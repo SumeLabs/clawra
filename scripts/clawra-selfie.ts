@@ -62,6 +62,7 @@ type OutputFormat = "jpeg" | "png" | "webp";
 type Backend =
   | "qwen-image-plus"
   | "qwen"
+  | "qwen-image-edit-plus"
   | "volc-seedream"
   | "seedream"
   | "volc-seededit"
@@ -143,6 +144,66 @@ function resolveQwenModel(override?: string): string {
   return override || "qwen-image-plus-2026-01-09";
 }
 
+function resolveQwenEditModel(override?: string): string {
+  return override || "qwen-image-edit-plus";
+}
+
+function aspectRatioToQwenEditSize(ratio: AspectRatio): string {
+  const lookup: Record<AspectRatio, string> = {
+    "1:1": "1024*1024",
+    "4:3": "1280*960",
+    "3:4": "960*1280",
+    "16:9": "1280*720",
+    "9:16": "720*1280",
+    "3:2": "1152*768",
+    "2:3": "768*1152",
+    "2:1": "1536*768",
+    "1:2": "768*1536",
+    "20:9": "1600*720",
+    "9:20": "720*1600",
+    "19.5:9": "1560*720",
+    "9:19.5": "720*1560",
+  };
+
+  return lookup[ratio] || "1024*1024";
+}
+
+function detectImageMimeType(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  switch (ext) {
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    case ".bmp":
+      return "image/bmp";
+    case ".tif":
+    case ".tiff":
+      return "image/tiff";
+    case ".gif":
+      return "image/gif";
+    default:
+      return "image/png";
+  }
+}
+
+async function resolveQwenEditImages(): Promise<string[]> {
+  if (process.env.QWEN_IMAGE_EDIT_IMAGE_PATH) {
+    const imagePath = process.env.QWEN_IMAGE_EDIT_IMAGE_PATH;
+    const data = await fs.readFile(imagePath);
+    const mimeType = detectImageMimeType(imagePath);
+    return [`data:${mimeType};base64,${data.toString("base64")}`];
+  }
+
+  return [
+    process.env.QWEN_IMAGE_EDIT_IMAGE_URL ||
+      "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png",
+  ];
+}
+
 function resolveGoogleModel(backend: Backend, override?: string): string {
   if (override) return override;
 
@@ -157,6 +218,7 @@ function assertBackend(backend: string): asserts backend is Backend {
   const supported: Backend[] = [
     "qwen-image-plus",
     "qwen",
+    "qwen-image-edit-plus",
     "volc-seedream",
     "seedream",
     "volc-seededit",
@@ -423,6 +485,88 @@ async function generateImageWithQwen(options: {
     backend: "qwen-image-plus",
     model,
     revisedPrompt,
+  };
+}
+
+/**
+ * Edit image using Alibaba Qwen Image Edit (DashScope)
+ */
+async function generateImageWithQwenEdit(options: {
+  prompt: string;
+  aspectRatio: AspectRatio;
+  modelOverride?: string;
+}): Promise<GeneratedImage> {
+  const apiKey = resolveDashScopeApiKey();
+  if (!apiKey) {
+    throw new Error(
+      "DashScope API key missing. Set DASHSCOPE_API_KEY or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY"
+    );
+  }
+
+  const model = resolveQwenEditModel(options.modelOverride);
+  const baseUrl = resolveDashScopeBaseUrl();
+  const images = await resolveQwenEditImages();
+
+  const parameters: Record<string, any> = {
+    n: 1,
+    watermark: false,
+    prompt_extend: true,
+    size: aspectRatioToQwenEditSize(options.aspectRatio),
+  };
+
+  const content = images.map((image) => ({ image }));
+  content.push({ text: options.prompt });
+
+  const response = await fetch(
+    `${baseUrl}/api/v1/services/aigc/multimodal-generation/generation`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: {
+          messages: [
+            {
+              role: "user",
+              content,
+            },
+          ],
+        },
+        parameters,
+      }),
+    }
+  );
+
+  const raw = await response.text();
+  let data: any;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`Qwen image edit returned non-JSON response: ${raw}`);
+  }
+
+  if (!response.ok || data?.code || data?.error) {
+    const errMsg = data?.message || data?.error?.message || raw;
+    throw new Error(`Qwen image edit failed: ${errMsg}`);
+  }
+
+  const media =
+    data?.output?.choices?.[0]?.message?.content?.find(
+      (part: any) => typeof part?.image === "string"
+    )?.image;
+
+  if (!media) {
+    throw new Error("Qwen image edit response missing image url");
+  }
+
+  return {
+    media,
+    source: "url",
+    backend: "qwen-image-edit-plus",
+    model,
   };
 }
 
@@ -761,6 +905,8 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
       ? "Generated with Grok Imagine"
       : backend === "qwen-image-plus" || backend === "qwen"
       ? "Generated with Qwen Image"
+      : backend === "qwen-image-edit-plus"
+      ? "Edited with Qwen Image Edit"
       : backend === "volc-seedream" || backend === "seedream"
       ? "Generated with Seedream"
       : backend === "volc-seededit" || backend === "seededit"
@@ -798,6 +944,12 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
       : backend === "qwen-image-plus" || backend === "qwen"
       ? await generateImageWithQwen({
           prompt,
+          modelOverride: googleModel,
+        })
+      : backend === "qwen-image-edit-plus"
+      ? await generateImageWithQwenEdit({
+          prompt,
+          aspectRatio,
           modelOverride: googleModel,
         })
       : backend === "volc-seedream" || backend === "seedream"
@@ -876,13 +1028,15 @@ Arguments:
   caption       - Message caption (default: auto by backend)
   aspect_ratio  - Image ratio (default: 1:1)
   output_format - Image format (fal only, default: jpeg)
-  backend       - qwen-image-plus | qwen | volc-seedream | seedream | volc-seededit | seededit | hunyuan-image | hunyuan | fal | google-nano-banana | google-nano-banana-pro | google (default: qwen-image-plus)
+  backend       - qwen-image-plus | qwen | qwen-image-edit-plus | volc-seedream | seedream | volc-seededit | seededit | hunyuan-image | hunyuan | fal | google-nano-banana | google-nano-banana-pro | google (default: qwen-image-plus)
   model_override- Optional model override (qwen/google/volc)
 
 Environment:
   DASHSCOPE_API_KEY        - Qwen backend key (or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY)
   DASHSCOPE_REGION         - beijing | singapore (default: beijing)
   DASHSCOPE_BASE_URL       - Optional base URL override
+  QWEN_IMAGE_EDIT_IMAGE_URL - Optional reference image URL for qwen-image-edit-plus
+  QWEN_IMAGE_EDIT_IMAGE_PATH - Optional local reference image path for qwen-image-edit-plus
   FAL_KEY                  - fal backend key
   GOOGLE_API_KEY           - Google backend key (or GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY)
   TENCENT_SECRET_ID        - Tencent Cloud SecretId (hunyuan backend)
@@ -900,6 +1054,7 @@ Environment:
 
 Examples:
   DASHSCOPE_API_KEY=*** npx ts-node clawra-selfie.ts "A stylish mirror selfie in a cafe" "#art" "Qwen selfie" "1:1" "png" "qwen-image-plus"
+  DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png npx ts-node clawra-selfie.ts "把人物换成电影海报风格" "#art" "Qwen edit" "3:4" "png" "qwen-image-edit-plus"
   FAL_KEY=*** npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!" "1:1" "jpeg" "fal"
   GOOGLE_API_KEY=*** npx ts-node clawra-selfie.ts "A cat astronaut" "#art" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
   TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** npx ts-node clawra-selfie.ts "保持人物不变，换成城市夜景自拍" "#art" "Hunyuan edit" "1:1" "png" "hunyuan"
@@ -936,6 +1091,7 @@ Examples:
 export {
   generateImageWithFal,
   generateImageWithQwen,
+  generateImageWithQwenEdit,
   generateImageWithSeedream,
   generateImageWithSeededit,
   generateImageWithHunyuan,

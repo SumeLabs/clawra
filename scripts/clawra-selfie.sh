@@ -9,6 +9,7 @@
 # Backends:
 #   qwen-image-plus           -> Alibaba Qwen Image (DashScope)
 #   qwen                      -> Alias of qwen-image-plus
+#   qwen-image-edit-plus      -> Alibaba Qwen Image Edit (DashScope)
 #   volc-seedream / seedream  -> Volcengine Ark Seedream (text-to-image)
 #   volc-seededit / seededit  -> Volcengine Ark image edit using Seedream model family
 #   hunyuan-image / hunyuan   -> Tencent Hunyuan Image edit via Tencent Cloud API
@@ -113,6 +114,34 @@ resolve_qwen_model() {
     fi
 }
 
+resolve_qwen_edit_model() {
+    local override="${1:-}"
+    if [ -n "$override" ]; then
+        echo "$override"
+    else
+        echo "qwen-image-edit-plus"
+    fi
+}
+
+map_aspect_ratio_to_qwen_edit_size() {
+    local ratio="${1:-1:1}"
+    case "$ratio" in
+        "16:9") echo "1280*720" ;;
+        "9:16") echo "720*1280" ;;
+        "4:3") echo "1280*960" ;;
+        "3:4") echo "960*1280" ;;
+        "3:2") echo "1152*768" ;;
+        "2:3") echo "768*1152" ;;
+        "2:1") echo "1536*768" ;;
+        "1:2") echo "768*1536" ;;
+        "20:9") echo "1600*720" ;;
+        "9:20") echo "720*1600" ;;
+        "19.5:9") echo "1560*720" ;;
+        "9:19.5") echo "720*1560" ;;
+        *) echo "1024*1024" ;;
+    esac
+}
+
 resolve_ark_api_key() {
     if [ -n "${ARK_API_KEY:-}" ]; then
         echo "$ARK_API_KEY"
@@ -205,7 +234,7 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
     echo "  caption       - Message caption (default: 'Generated image')"
     echo "  aspect_ratio  - Image ratio (default: 1:1) Options: 2:1, 16:9, 4:3, 1:1, 3:4, 9:16"
     echo "  output_format - Image format (default: jpeg) Options: jpeg, png, webp"
-    echo "  backend       - qwen-image-plus | qwen | volc-seedream | seedream | volc-seededit | seededit | hunyuan-image | hunyuan | fal | google-nano-banana | google-nano-banana-pro | google (default: qwen-image-plus)"
+    echo "  backend       - qwen-image-plus | qwen | qwen-image-edit-plus | volc-seedream | seedream | volc-seededit | seededit | hunyuan-image | hunyuan | fal | google-nano-banana | google-nano-banana-pro | google (default: qwen-image-plus)"
     echo "  model_override- Optional model override (qwen/google/volc backends), e.g. qwen-image-plus-2026-01-09"
     echo ""
     echo "Example:"
@@ -215,11 +244,11 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
 fi
 
 case "$BACKEND" in
-    qwen-image-plus|qwen|volc-seedream|seedream|volc-seededit|seededit|hunyuan-image|hunyuan|fal|google-nano-banana|google-nano-banana-pro|google)
+    qwen-image-plus|qwen|qwen-image-edit-plus|volc-seedream|seedream|volc-seededit|seededit|hunyuan-image|hunyuan|fal|google-nano-banana|google-nano-banana-pro|google)
         ;;
     *)
         log_error "Unsupported backend: $BACKEND"
-        echo "Supported backends: qwen-image-plus, qwen, volc-seedream, seedream, volc-seededit, seededit, hunyuan-image, hunyuan, fal, google-nano-banana, google-nano-banana-pro, google"
+        echo "Supported backends: qwen-image-plus, qwen, qwen-image-edit-plus, volc-seedream, seedream, volc-seededit, seededit, hunyuan-image, hunyuan, fal, google-nano-banana, google-nano-banana-pro, google"
         exit 1
         ;;
 esac
@@ -327,6 +356,71 @@ elif [ "$BACKEND" = "volc-seedream" ] || [ "$BACKEND" = "seedream" ]; then
 
     if [ -z "$MEDIA_TARGET" ]; then
         log_error "Failed to extract image URL from Seedream response"
+        echo "Response: $RESPONSE"
+        exit 1
+    fi
+elif [ "$BACKEND" = "qwen-image-edit-plus" ]; then
+    DASHSCOPE_API_KEY_RESOLVED=$(resolve_dashscope_api_key)
+    if [ -z "$DASHSCOPE_API_KEY_RESOLVED" ]; then
+        log_error "DashScope API key missing for qwen-image-edit-plus backend"
+        echo "Set one of: DASHSCOPE_API_KEY, ALIBABA_CLOUD_MODEL_STUDIO_API_KEY"
+        exit 1
+    fi
+
+    MODEL_USED=$(resolve_qwen_edit_model "$MODEL_OVERRIDE_ARG")
+    DASHSCOPE_BASE_URL=$(resolve_dashscope_base_url)
+
+    EDIT_IMAGE="${QWEN_IMAGE_EDIT_IMAGE_URL:-https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png}"
+
+    if [ -n "${QWEN_IMAGE_EDIT_IMAGE_PATH:-}" ]; then
+        IMG_B64=$(base64 < "$QWEN_IMAGE_EDIT_IMAGE_PATH" | tr -d '\n')
+        EDIT_IMAGE="data:image/png;base64,${IMG_B64}"
+    fi
+
+    EDIT_SIZE=$(map_aspect_ratio_to_qwen_edit_size "$ASPECT_RATIO")
+
+    JSON_PAYLOAD=$(jq -n \
+        --arg model "$MODEL_USED" \
+        --arg prompt "$PROMPT" \
+        --arg image "$EDIT_IMAGE" \
+        --arg size "$EDIT_SIZE" \
+        '{
+          model: $model,
+          input: {
+            messages: [
+              {
+                role: "user",
+                content: [
+                  {image: $image},
+                  {text: $prompt}
+                ]
+              }
+            ]
+          },
+          parameters: {
+            size: $size,
+            n: 1,
+            watermark: false,
+            prompt_extend: true
+          }
+        }')
+
+    RESPONSE=$(curl -s -X POST "${DASHSCOPE_BASE_URL}/api/v1/services/aigc/multimodal-generation/generation" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${DASHSCOPE_API_KEY_RESOLVED}" \
+        -d "$JSON_PAYLOAD")
+
+    if echo "$RESPONSE" | jq -e '.code or .error' > /dev/null 2>&1; then
+        ERROR_MSG=$(echo "$RESPONSE" | jq -r '.message // .error.message // .error // "Unknown error"')
+        log_error "Qwen image edit failed: $ERROR_MSG"
+        exit 1
+    fi
+
+    MEDIA_TARGET=$(echo "$RESPONSE" | jq -r '.output.choices[0].message.content[]? | select(.image != null) | .image' | head -n 1)
+    REVISED_PROMPT=$(echo "$RESPONSE" | jq -r '.output.choices[0].message.content[]? | select(.text != null) | .text' | head -n 1)
+
+    if [ -z "$MEDIA_TARGET" ]; then
+        log_error "Failed to extract image URL from qwen image edit response"
         echo "Response: $RESPONSE"
         exit 1
     fi

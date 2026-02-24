@@ -21,6 +21,7 @@
 | Backend | 用途 | 关键配置 |
 |---|---|---|
 | `qwen-image-plus` / `qwen` | 文生图（默认） | `DASHSCOPE_API_KEY` |
+| `qwen-image-edit-plus` | 参考图编辑（Qwen） | `DASHSCOPE_API_KEY` |
 | `volc-seedream` / `seedream` | 文生图 | `ARK_API_KEY` |
 | `volc-seededit` / `seededit` | 参考图编辑 | `ARK_API_KEY` |
 | `hunyuan-image` / `hunyuan` | 腾讯混元图像 3.0（异步任务） | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
@@ -104,6 +105,8 @@ npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#gener
 ```bash
 # Qwen
 DASHSCOPE_API_KEY=your_key
+QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png  # 可选，qwen-image-edit-plus 参考图
+QWEN_IMAGE_EDIT_IMAGE_PATH=/path/to/input.png            # 可选，优先于 URL
 
 # Volcengine
 ARK_API_KEY=your_key
