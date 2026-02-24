@@ -12,7 +12,7 @@ This repository is an upgraded fork of the original Clawra project. The main goa
 - Multi-backend generation/editing: Qwen, Volcengine Seedream/SeedEdit, Tencent Hunyuan, fal, and Google nano-banana
 - Improved Hunyuan async polling: 1 request per second, up to 120 seconds
 - Observable generation runtime: each run logs both model info and generation duration
-- Dual script implementations: `scripts/clawra-selfie.sh` and `scripts/clawra-selfie.ts`
+- TS-only implementation: core logic lives in `scripts/clawra-selfie.ts` (`*.sh` kept as compatibility wrapper)
 - Bilingual skill docs: `SKILL.md` and `SKILL_CN.md`
 - OpenClaw delivery flow preserved: generated images can be sent to Discord/Telegram/WhatsApp/Slack, etc.
 
@@ -75,10 +75,6 @@ Then enable it in `~/.openclaw/openclaw.json`:
 ```
 
 ## Run Scripts Directly
-
-```bash
-./scripts/clawra-selfie.sh "Keep the person unchanged, switch to a city night selfie" "#general" "Hunyuan" "1:1" "png" "hunyuan"
-```
 
 ```bash
 npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen-image-plus"

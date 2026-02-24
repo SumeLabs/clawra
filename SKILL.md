@@ -51,7 +51,9 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gatewa
 
 ### Script Backends
 
-`scripts/clawra-selfie.sh` and `scripts/clawra-selfie.ts` support:
+Core implementation is TypeScript in `scripts/clawra-selfie.ts` (`scripts/clawra-selfie.sh` is a wrapper that forwards to TS).
+
+Supported backends:
 
 - `qwen-image-plus` (default): calls Alibaba DashScope `qwen-image-plus-2026-01-09` (or override model)
 - `qwen-image-edit-plus`: calls Alibaba DashScope `qwen-image-edit-plus` for reference-image editing
@@ -174,46 +176,46 @@ curl -X POST "http://localhost:18789/message" \
 
 ## How to Use the Scripts
 
-Both scripts accept the same positional arguments:
+Script arguments:
 
 ```
 <prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
 ```
 
-Use `scripts/clawra-selfie.sh` (bash) or `scripts/clawra-selfie.ts` (TypeScript via `npx ts-node`). Examples below use the shell script; replace with `npx ts-node scripts/clawra-selfie.ts` for TypeScript.
+Use TypeScript directly via `npx ts-node scripts/clawra-selfie.ts`.
 
 ```bash
 # qwen-image-plus (default) — DASHSCOPE_API_KEY
 DASHSCOPE_API_KEY=*** \
-  ./scripts/clawra-selfie.sh "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+  npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
 
 # qwen-image-edit-plus (reference image edit) — DASHSCOPE_API_KEY
 DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
-  ./scripts/clawra-selfie.sh "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
+  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
 
 # volc-seedream (text-to-image) — ARK_API_KEY
 ARK_API_KEY=*** \
-  ./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc-seedream"
+  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc-seedream"
 
 # volc-seededit (image edit with reference) — ARK_API_KEY
 ARK_API_KEY=*** \
-  ./scripts/clawra-selfie.sh "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc-seededit"
+  npx ts-node scripts/clawra-selfie.ts "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc-seededit"
 
 # fal (xAI Grok Imagine) — FAL_KEY
 FAL_KEY=*** \
-  ./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
+  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
 
 # hunyuan (Tencent image edit) — TENCENT_SECRET_ID + TENCENT_SECRET_KEY
 TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
-  ./scripts/clawra-selfie.sh "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
+  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
 
 # google-nano-banana — GOOGLE_API_KEY
 GOOGLE_API_KEY=*** \
-  ./scripts/clawra-selfie.sh "a cozy cafe selfie" "#photos" "Flash" "1:1" "png" "google-nano-banana"
+  npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Flash" "1:1" "png" "google-nano-banana"
 
 # google-nano-banana-pro — GOOGLE_API_KEY
 GOOGLE_API_KEY=*** \
-  ./scripts/clawra-selfie.sh "a cat astronaut selfie" "#photos" "Nano Banana Pro" "1:1" "png" "google-nano-banana-pro"
+  npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#photos" "Nano Banana Pro" "1:1" "png" "google-nano-banana-pro"
 ```
 
 ## Supported Platforms

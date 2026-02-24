@@ -45,7 +45,9 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gat
 
 ### 脚本后端
 
-`scripts/clawra-selfie.sh` 和 `scripts/clawra-selfie.ts` 支持：
+核心实现为 TypeScript：`scripts/clawra-selfie.ts`（`scripts/clawra-selfie.sh` 仅作兼容转发）。
+
+支持的后端：
 
 - `qwen-image-plus`（默认）：调用阿里巴巴 DashScope `qwen-image-plus-2026-01-09`（或覆盖模型）
 - `qwen-image-edit-plus`：调用阿里巴巴 DashScope `qwen-image-edit-plus` 做参考图编辑
@@ -56,14 +58,14 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gat
 - `google-nano-banana`：调用 Google `gemini-2.5-flash-image`（返回内联图片数据，脚本存储到临时文件）
 - `google-nano-banana-pro`：调用 Google `gemini-3-pro-image-preview`（返回内联图片数据，脚本存储到临时文件）
 
-Shell 示例：
+TypeScript 示例：
 
 ```bash
 # fal 后端
-./scripts/clawra-selfie.sh "a cyberpunk selfie" "#general" "AI selfie" "1:1" "jpeg" "fal"
+FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk selfie" "#general" "AI selfie" "1:1" "jpeg" "fal"
 
 # Google nano-banana-pro 后端
-./scripts/clawra-selfie.sh "a cat astronaut selfie" "#general" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
+GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#general" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
 ```
 
 ## 分步说明
@@ -178,44 +180,31 @@ curl -X POST "http://localhost:18789/message" \
 
 ## 如何使用脚本
 
-两个脚本接受相同的位置参数：
+脚本位置参数：
 
 ```
 <prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
-```
-
-### Shell 脚本（`scripts/clawra-selfie.sh`）
-
-```bash
-# 默认 backend（qwen-image-plus）
-./scripts/clawra-selfie.sh "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
-
-# qwen-image-edit-plus（参考图编辑）
-DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
-  ./scripts/clawra-selfie.sh "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
-
-# fal backend
-./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
-
-# Google nano-banana-pro
-./scripts/clawra-selfie.sh "a cozy cafe selfie" "#photos" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
-
-# Hunyuan 图片编辑
-TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
-  ./scripts/clawra-selfie.sh "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
 ```
 
 ### TypeScript 脚本（`scripts/clawra-selfie.ts`）
 
 ```bash
 # 默认 backend（qwen-image-plus）
-DASHSCOPE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie" "#art" "Qwen selfie" "1:1" "png"
+DASHSCOPE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+
+# qwen-image-edit-plus（参考图编辑）
+DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
+  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
 
 # fal backend
-FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!" "1:1" "jpeg" "fal"
+FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
 
 # Google nano-banana-pro
-GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "A cat astronaut" "#art" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
+GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
+
+# Hunyuan 图片编辑
+TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
+  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
 ```
 
 ## 支持的平台

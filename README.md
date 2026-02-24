@@ -5,14 +5,14 @@
 
 仓库地址：`https://github.com/kevin1sMe/clawra-plus`
 
-这是一个基于原始 Clawra fork 后持续升级的版本，目标是把「AI 自拍能力」从单一后端扩展为可切换、多供应商、多脚本形态的稳定方案。
+这是一个基于原始 Clawra fork 后持续升级的版本，目标是把「AI 自拍能力」从单一后端扩展为可切换、多供应商、可维护的稳定方案。
 
 ## 这个升级版新增了什么
 
 - 多后端生图/编辑：支持 Qwen、Volcengine Seedream/SeedEdit、Tencent Hunyuan、fal、Google nano-banana
 - Hunyuan 异步任务增强：轮询策略为每 1 秒 1 次，最多 120 秒
 - 生成耗时可观测：每次生图都会输出模型信息和本次耗时
-- 双脚本实现：同时维护 `scripts/clawra-selfie.sh` 和 `scripts/clawra-selfie.ts`
+- TS 单实现：核心逻辑只在 `scripts/clawra-selfie.ts`（`*.sh` 仅兼容包装）
 - 中英文技能文档：包含 `SKILL.md` 与 `SKILL_CN.md`
 - 保持 OpenClaw 集成：生成后直接投递到 Discord/Telegram/WhatsApp/Slack 等渠道
 
@@ -75,10 +75,6 @@ git clone https://github.com/kevin1sMe/clawra-plus ~/.openclaw/skills/clawra-sel
 ```
 
 ## 直接调用脚本
-
-```bash
-./scripts/clawra-selfie.sh "保持人物不变，换成城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
-```
 
 ```bash
 npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen-image-plus"
