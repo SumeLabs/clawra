@@ -1,7 +1,7 @@
 {
   "name": "clawra",
   "version": "1.1.1",
-  "description": "Add selfie superpowers to your OpenClaw agent using xAI Grok Imagine",
+  "description": "Add selfie superpowers to your OpenClaw agent using Qwen Image, Grok Imagine, Google nano-banana, Hunyuan and more",
   "bin": {
     "clawra": "./bin/cli.js"
   },
@@ -20,6 +20,13 @@
     "xai",
     "aurora",
     "fal.ai",
+    "qwen",
+    "dashscope",
+    "hunyuan",
+    "google",
+    "gemini",
+    "seedream",
+    "volcengine",
     "selfie",
     "ai-agent",
     "image-generation",
@@ -35,7 +42,9 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
+  "dependencies": {
+    "tencentcloud-sdk-nodejs": "^4.1.186"
+  },
   "devDependencies": {
     "@fal-ai/client": "^1.2.0",
     "@types/node": "^22.0.0",

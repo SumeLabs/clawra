@@ -1,19 +1,19 @@
 ---
 name: clawra-selfie
-description: Edit Clawra's reference image with Grok Imagine (xAI Aurora) and send selfies to messaging channels via OpenClaw
+description: Generate or edit Clawra selfies with Qwen Image, Grok Imagine, or Google nano-banana models and send them via OpenClaw
 allowed-tools: Bash(npm:*) Bash(npx:*) Bash(openclaw:*) Bash(curl:*) Read Write WebFetch
 ---
 
 # Clawra Selfie
 
-Edit a fixed reference image using xAI's Grok Imagine model and distribute it across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
+Generate or edit selfie images with Alibaba Qwen Image, xAI Grok Imagine, or Google nano-banana models, then distribute them across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
 
 ## Reference Image
 
 The skill uses a fixed reference image hosted on jsDelivr CDN:
 
 ```
-https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
+https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png
 ```
 
 ## When to Use
@@ -29,16 +29,37 @@ https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
 ### Required Environment Variables
 
 ```bash
-FAL_KEY=your_fal_api_key          # Get from https://fal.ai/dashboard/keys
-OPENCLAW_GATEWAY_TOKEN=your_token  # From: openclaw doctor --generate-gateway-token
+DASHSCOPE_API_KEY=your_key             # qwen-image-plus backend (or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY)
+ARK_API_KEY=your_key                   # volc-seedream / volc-seededit backend (or VOLCENGINE_API_KEY)
+FAL_KEY=your_fal_api_key               # fal backend
+GOOGLE_API_KEY=your_google_api_key     # google backend (or GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY)
+TENCENT_SECRET_ID=your_secret_id       # hunyuan backend
+TENCENT_SECRET_KEY=your_secret_key     # hunyuan backend
+# TENCENT_REFERENCE_IMAGE_URL=url      # optional, overrides default Clawra CDN image
+# TENCENT_RESOLUTION=1024:1024         # optional
+# TENCENT_REVISE=1                     # optional, prompt rewriting (default: 1)
+# TENCENT_SEED=123                     # optional, fixed seed
+OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gateway-token
 ```
 
 ### Workflow
 
-1. **Get user prompt** for how to edit the image
-2. **Edit image** via fal.ai Grok Imagine Edit API with fixed reference
-3. **Extract image URL** from response
+1. **Get user prompt** for generation/editing context
+2. **Choose backend**: `qwen-image-plus` (default) / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
+3. **Generate image** via selected backend
 4. **Send to OpenClaw** with target channel(s)
+
+### Script Backends
+
+`scripts/clawra-selfie.sh` and `scripts/clawra-selfie.ts` support:
+
+- `qwen-image-plus` (default): calls Alibaba DashScope `qwen-image-plus-2026-01-09` (or override model)
+- `volc-seedream`/`seedream`: calls Volcengine Ark text-to-image (`/images/generations`)
+- `volc-seededit`/`seededit`: calls Volcengine Ark image edit (`/images/edits`) using Clawra reference image
+- `fal`: calls `xai/grok-imagine-image` on fal.ai (returns image URL)
+- `hunyuan-image`/`hunyuan`: calls Tencent Hunyuan Image 3.0 (`SubmitTextToImageJob` + polls `QueryTextToImageJob`) on `aiart.tencentcloudapi.com`; passes Clawra reference image URL via `Images[]`; async job, polls every 5s up to 5 min
+- `google-nano-banana`: calls Google `gemini-2.5-flash-image` (returns inline image data, script stores to temp file)
+- `google-nano-banana-pro`: calls Google `gemini-3-pro-image-preview` (returns inline image data, script stores to temp file)
 
 ## Step-by-Step Instructions
 
@@ -90,7 +111,7 @@ a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye
 Use the fal.ai API to edit the reference image:
 
 ```bash
-REFERENCE_IMAGE="https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png"
+REFERENCE_IMAGE="https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png"
 
 # Mode 1: Mirror Selfie
 PROMPT="make a pic of this person, but <USER_CONTEXT>. the person is taking a mirror selfie"
@@ -150,195 +171,44 @@ curl -X POST "http://localhost:18789/message" \
   }'
 ```
 
-## Complete Script Example
+## How to Use the Scripts
 
-```bash
-#!/bin/bash
-# grok-imagine-edit-send.sh
+Both scripts accept the same positional arguments:
 
-# Check required environment variables
-if [ -z "$FAL_KEY" ]; then
-  echo "Error: FAL_KEY environment variable not set"
-  exit 1
-fi
-
-# Fixed reference image
-REFERENCE_IMAGE="https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png"
-
-USER_CONTEXT="$1"
-CHANNEL="$2"
-MODE="${3:-auto}"  # mirror, direct, or auto
-CAPTION="${4:-Edited with Grok Imagine}"
-
-if [ -z "$USER_CONTEXT" ] || [ -z "$CHANNEL" ]; then
-  echo "Usage: $0 <user_context> <channel> [mode] [caption]"
-  echo "Modes: mirror, direct, auto (default)"
-  echo "Example: $0 'wearing a cowboy hat' '#general' mirror"
-  echo "Example: $0 'a cozy cafe' '#general' direct"
-  exit 1
-fi
-
-# Auto-detect mode based on keywords
-if [ "$MODE" == "auto" ]; then
-  if echo "$USER_CONTEXT" | grep -qiE "outfit|wearing|clothes|dress|suit|fashion|full-body|mirror"; then
-    MODE="mirror"
-  elif echo "$USER_CONTEXT" | grep -qiE "cafe|restaurant|beach|park|city|close-up|portrait|face|eyes|smile"; then
-    MODE="direct"
-  else
-    MODE="mirror"  # default
-  fi
-  echo "Auto-detected mode: $MODE"
-fi
-
-# Construct the prompt based on mode
-if [ "$MODE" == "direct" ]; then
-  EDIT_PROMPT="a close-up selfie taken by herself at $USER_CONTEXT, direct eye contact with the camera, looking straight into the lens, eyes centered and clearly visible, not a mirror selfie, phone held at arm's length, face fully visible"
-else
-  EDIT_PROMPT="make a pic of this person, but $USER_CONTEXT. the person is taking a mirror selfie"
-fi
-
-echo "Mode: $MODE"
-echo "Editing reference image with prompt: $EDIT_PROMPT"
-
-# Edit image (using jq for proper JSON escaping)
-JSON_PAYLOAD=$(jq -n \
-  --arg image_url "$REFERENCE_IMAGE" \
-  --arg prompt "$EDIT_PROMPT" \
-  '{image_url: $image_url, prompt: $prompt, num_images: 1, output_format: "jpeg"}')
-
-RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image/edit" \
-  -H "Authorization: Key $FAL_KEY" \
-  -H "Content-Type: application/json" \
-  -d "$JSON_PAYLOAD")
-
-# Extract image URL
-IMAGE_URL=$(echo "$RESPONSE" | jq -r '.images[0].url')
-
-if [ "$IMAGE_URL" == "null" ] || [ -z "$IMAGE_URL" ]; then
-  echo "Error: Failed to edit image"
-  echo "Response: $RESPONSE"
-  exit 1
-fi
-
-echo "Image edited: $IMAGE_URL"
-echo "Sending to channel: $CHANNEL"
-
-# Send via OpenClaw
-openclaw message send \
-  --action send \
-  --channel "$CHANNEL" \
-  --message "$CAPTION" \
-  --media "$IMAGE_URL"
-
-echo "Done!"
+```
+<prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
 ```
 
-## Node.js/TypeScript Implementation
+Use `scripts/clawra-selfie.sh` (bash) or `scripts/clawra-selfie.ts` (TypeScript via `npx ts-node`). Examples below use the shell script; replace with `npx ts-node scripts/clawra-selfie.ts` for TypeScript.
 
-```typescript
-import { fal } from "@fal-ai/client";
-import { exec } from "child_process";
-import { promisify } from "util";
+```bash
+# qwen-image-plus (default) — DASHSCOPE_API_KEY
+DASHSCOPE_API_KEY=*** \
+  ./scripts/clawra-selfie.sh "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
 
-const execAsync = promisify(exec);
+# volc-seedream (text-to-image) — ARK_API_KEY
+ARK_API_KEY=*** \
+  ./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc-seedream"
 
-const REFERENCE_IMAGE = "https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png";
+# volc-seededit (image edit with reference) — ARK_API_KEY
+ARK_API_KEY=*** \
+  ./scripts/clawra-selfie.sh "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc-seededit"
 
-interface GrokImagineResult {
-  images: Array<{
-    url: string;
-    content_type: string;
-    width: number;
-    height: number;
-  }>;
-  revised_prompt?: string;
-}
+# fal (xAI Grok Imagine) — FAL_KEY
+FAL_KEY=*** \
+  ./scripts/clawra-selfie.sh "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
 
-type SelfieMode = "mirror" | "direct" | "auto";
+# hunyuan (Tencent image edit) — TENCENT_SECRET_ID + TENCENT_SECRET_KEY
+TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
+  ./scripts/clawra-selfie.sh "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
 
-function detectMode(userContext: string): "mirror" | "direct" {
-  const mirrorKeywords = /outfit|wearing|clothes|dress|suit|fashion|full-body|mirror/i;
-  const directKeywords = /cafe|restaurant|beach|park|city|close-up|portrait|face|eyes|smile/i;
+# google-nano-banana — GOOGLE_API_KEY
+GOOGLE_API_KEY=*** \
+  ./scripts/clawra-selfie.sh "a cozy cafe selfie" "#photos" "Flash" "1:1" "png" "google-nano-banana"
 
-  if (directKeywords.test(userContext)) return "direct";
-  if (mirrorKeywords.test(userContext)) return "mirror";
-  return "mirror"; // default
-}
-
-function buildPrompt(userContext: string, mode: "mirror" | "direct"): string {
-  if (mode === "direct") {
-    return `a close-up selfie taken by herself at ${userContext}, direct eye contact with the camera, looking straight into the lens, eyes centered and clearly visible, not a mirror selfie, phone held at arm's length, face fully visible`;
-  }
-  return `make a pic of this person, but ${userContext}. the person is taking a mirror selfie`;
-}
-
-async function editAndSend(
-  userContext: string,
-  channel: string,
-  mode: SelfieMode = "auto",
-  caption?: string
-): Promise<string> {
-  // Configure fal.ai client
-  fal.config({
-    credentials: process.env.FAL_KEY!
-  });
-
-  // Determine mode
-  const actualMode = mode === "auto" ? detectMode(userContext) : mode;
-  console.log(`Mode: ${actualMode}`);
-
-  // Construct the prompt
-  const editPrompt = buildPrompt(userContext, actualMode);
-
-  // Edit reference image with Grok Imagine
-  console.log(`Editing image: "${editPrompt}"`);
-
-  const result = await fal.subscribe("xai/grok-imagine-image/edit", {
-    input: {
-      image_url: REFERENCE_IMAGE,
-      prompt: editPrompt,
-      num_images: 1,
-      output_format: "jpeg"
-    }
-  }) as { data: GrokImagineResult };
-
-  const imageUrl = result.data.images[0].url;
-  console.log(`Edited image URL: ${imageUrl}`);
-
-  // Send via OpenClaw
-  const messageCaption = caption || `Edited with Grok Imagine`;
-
-  await execAsync(
-    `openclaw message send --action send --channel "${channel}" --message "${messageCaption}" --media "${imageUrl}"`
-  );
-
-  console.log(`Sent to ${channel}`);
-  return imageUrl;
-}
-
-// Usage Examples
-
-// Mirror mode (auto-detected from "wearing")
-editAndSend(
-  "wearing a cyberpunk outfit with neon lights",
-  "#art-gallery",
-  "auto",
-  "Check out this AI-edited art!"
-);
-// → Mode: mirror
-// → Prompt: "make a pic of this person, but wearing a cyberpunk outfit with neon lights. the person is taking a mirror selfie"
-
-// Direct mode (auto-detected from "cafe")
-editAndSend(
-  "a cozy cafe with warm lighting",
-  "#photography",
-  "auto"
-);
-// → Mode: direct
-// → Prompt: "a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye contact..."
-
-// Explicit mode override
-editAndSend("casual street style", "#fashion", "direct");
+# google-nano-banana-pro — GOOGLE_API_KEY
+GOOGLE_API_KEY=*** \
+  ./scripts/clawra-selfie.sh "a cat astronaut selfie" "#photos" "Nano Banana Pro" "1:1" "png" "google-nano-banana-pro"
 ```
 
 ## Supported Platforms
@@ -365,9 +235,9 @@ OpenClaw supports sending to:
 
 ## Setup Requirements
 
-### 1. Install fal.ai client (for Node.js usage)
+### 1. Install SDK dependencies (for Node.js usage)
 ```bash
-npm install @fal-ai/client
+npm install @fal-ai/client tencentcloud-sdk-nodejs
 ```
 
 ### 2. Install OpenClaw CLI
