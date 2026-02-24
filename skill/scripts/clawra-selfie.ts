@@ -825,6 +825,7 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
 
   const generationTimeMs = Date.now() - generationStart;
   const generationTimeSeconds = (generationTimeMs / 1000).toFixed(1);
+  const messageText = `${caption} (model: ${generated.model}, time: ${generationTimeSeconds}s)`;
 
   console.log(`[INFO] Model: ${generated.model}`);
   console.log(`[INFO] Generation time: ${generationTimeSeconds}s`);
@@ -840,7 +841,7 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     {
       action: "send",
       channel,
-      message: caption,
+      message: messageText,
       media: generated.media,
     },
     useOpenClawCLI

@@ -591,6 +591,7 @@ else
 fi
 
 GENERATION_DURATION_SECONDS=$SECONDS
+MESSAGE_TEXT="$CAPTION (model: $MODEL_USED, time: ${GENERATION_DURATION_SECONDS}s)"
 
 log_info "Image generated successfully!"
 log_info "Model: $MODEL_USED"
@@ -608,7 +609,7 @@ if [ "$USE_CLI" = true ]; then
     openclaw message send \
         --action send \
         --channel "$CHANNEL" \
-        --message "$CAPTION" \
+        --message "$MESSAGE_TEXT" \
         --media "$MEDIA_TARGET"
 else
     GATEWAY_URL="${OPENCLAW_GATEWAY_URL:-http://localhost:18789}"
@@ -616,7 +617,7 @@ else
 
     MESSAGE_PAYLOAD=$(jq -n \
         --arg channel "$CHANNEL" \
-        --arg message "$CAPTION" \
+        --arg message "$MESSAGE_TEXT" \
         --arg media "$MEDIA_TARGET" \
         '{
           action: "send",
