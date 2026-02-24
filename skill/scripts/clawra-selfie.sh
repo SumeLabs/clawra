@@ -229,6 +229,8 @@ log_info "Backend: $BACKEND"
 log_info "Prompt: $PROMPT"
 log_info "Aspect ratio: $ASPECT_RATIO"
 
+SECONDS=0
+
 RESPONSE=""
 MEDIA_TARGET=""
 REVISED_PROMPT=""
@@ -460,8 +462,8 @@ elif [ "$BACKEND" = "hunyuan-image" ] || [ "$BACKEND" = "hunyuan" ]; then
     const jobId = submitResp?.JobId;
     if (!jobId) throw new Error(`SubmitTextToImageJob returned no JobId: ${JSON.stringify(submitResp)}`);
 
-    const maxAttempts = 60;
-    const pollIntervalMs = 5000;
+    const maxAttempts = 120;
+    const pollIntervalMs = 1000;
 
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise(r => setTimeout(r, pollIntervalMs));
@@ -588,8 +590,11 @@ else
     mv "$TMP_IMAGE" "$MEDIA_TARGET"
 fi
 
+GENERATION_DURATION_SECONDS=$SECONDS
+
 log_info "Image generated successfully!"
 log_info "Model: $MODEL_USED"
+log_info "Generation time: ${GENERATION_DURATION_SECONDS}s"
 log_info "Media: $MEDIA_TARGET"
 
 if [ -n "$REVISED_PROMPT" ] && [ "$REVISED_PROMPT" != "null" ]; then
@@ -637,11 +642,13 @@ jq -n \
     --arg prompt "$PROMPT" \
     --arg backend "$BACKEND" \
     --arg model "$MODEL_USED" \
+    --argjson generation_time_seconds "$GENERATION_DURATION_SECONDS" \
     '{
         success: true,
         image_url: $media,
         channel: $channel,
         prompt: $prompt,
         backend: $backend,
-        model: $model
+        model: $model,
+        generation_time_seconds: $generation_time_seconds
     }'

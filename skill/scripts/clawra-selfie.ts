@@ -94,6 +94,7 @@ interface Result {
   prompt: string;
   backend: Backend;
   model: string;
+  generationTimeMs: number;
   revisedPrompt?: string;
 }
 
@@ -673,7 +674,7 @@ async function generateImageWithHunyuan(options: {
     throw new Error(`SubmitTextToImageJob returned no JobId: ${JSON.stringify(submitResp)}`);
   }
 
-  const maxAttempts = 60;
+  const maxAttempts = 120;
   const pollIntervalMs = 1000;
 
   for (let i = 0; i < maxAttempts; i++) {
@@ -784,6 +785,8 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     );
   }
 
+  const generationStart = Date.now();
+
   const generated =
     backend === "fal"
       ? await generateImageWithFal({
@@ -820,7 +823,11 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
           googleModel,
         });
 
+  const generationTimeMs = Date.now() - generationStart;
+  const generationTimeSeconds = (generationTimeMs / 1000).toFixed(1);
+
   console.log(`[INFO] Model: ${generated.model}`);
+  console.log(`[INFO] Generation time: ${generationTimeSeconds}s`);
   console.log(`[INFO] Media: ${generated.media}`);
 
   if (generated.revisedPrompt) {
@@ -849,6 +856,7 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     prompt,
     backend: generated.backend,
     model: generated.model,
+    generationTimeMs,
     revisedPrompt: generated.revisedPrompt,
   };
 }

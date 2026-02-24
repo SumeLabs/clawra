@@ -57,7 +57,7 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gatewa
 - `volc-seedream`/`seedream`: calls Volcengine Ark text-to-image (`/images/generations`)
 - `volc-seededit`/`seededit`: calls Volcengine Ark image edit (`/images/edits`) using Clawra reference image
 - `fal`: calls `xai/grok-imagine-image` on fal.ai (returns image URL)
-- `hunyuan-image`/`hunyuan`: calls Tencent Hunyuan Image 3.0 (`SubmitTextToImageJob` + polls `QueryTextToImageJob`) on `aiart.tencentcloudapi.com`; passes Clawra reference image URL via `Images[]`; async job, polls every 5s up to 5 min
+- `hunyuan-image`/`hunyuan`: calls Tencent Hunyuan Image 3.0 (`SubmitTextToImageJob` + polls `QueryTextToImageJob`) on `aiart.tencentcloudapi.com`; passes Clawra reference image URL via `Images[]`; async job, polls every 1s up to 120s
 - `google-nano-banana`: calls Google `gemini-2.5-flash-image` (returns inline image data, script stores to temp file)
 - `google-nano-banana-pro`: calls Google `gemini-3-pro-image-preview` (returns inline image data, script stores to temp file)
 
