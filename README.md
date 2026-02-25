@@ -16,17 +16,23 @@
 - 中英文技能文档：包含 `SKILL.md` 与 `SKILL_CN.md`
 - 保持 OpenClaw 集成：生成后直接投递到 Discord/Telegram/WhatsApp/Slack 等渠道
 
-## 后端能力一览
+## 平台与模型
 
-| Backend | 用途 | 关键配置 |
-|---|---|---|
-| `qwen-image-plus` / `qwen` | 文生图（默认） | `DASHSCOPE_API_KEY` |
-| `qwen-image-edit-plus` | 参考图编辑（Qwen） | `DASHSCOPE_API_KEY` |
-| `volc-seedream` / `seedream` | 文生图 | `ARK_API_KEY` |
-| `volc-seededit` / `seededit` | 参考图编辑 | `ARK_API_KEY` |
-| `hunyuan-image` / `hunyuan` | 腾讯混元图像 3.0（异步任务） | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
-| `fal` | xAI Grok Imagine | `FAL_KEY` |
-| `google-nano-banana` / `google-nano-banana-pro` / `google` | Google 图像模型 | `GOOGLE_API_KEY` |
+当前脚本使用统一结构：`platform -> operation(generate/edit) -> model(完整 API 名称)`。
+
+| Platform | Operation | 默认模型（可调用全名） | 关键配置 |
+|---|---|---|---|
+| `qwen` | `generate` / `edit` | `qwen-image-plus-2026-01-09` / `qwen-image-edit-plus` | `DASHSCOPE_API_KEY` |
+| `volc` | `generate` / `edit` | `doubao-seedream-4-0-250828` / `doubao-seedream-4-0-250828` | `ARK_API_KEY` |
+| `fal` | `generate` | `xai/grok-imagine-image` | `FAL_KEY` |
+| `google` | `generate` | `gemini-3-pro-image-preview` | `GOOGLE_API_KEY` |
+| `hunyuan` | `edit` | `aiart/v20221229 SubmitTextToImageJob` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
+
+查看完整模型列表：
+
+```bash
+npx ts-node scripts/clawra-selfie.ts --list-models
+```
 
 ## 快速开始
 
@@ -43,9 +49,9 @@ npx clawra@latest
 3. 更新 `~/.openclaw/openclaw.json`
 4. 注入必要的 persona 模板
 
-说明：当前安装器流程默认引导 `fal` key，其他后端请使用方式 B 手动配置环境变量。
+说明：当前安装器流程默认引导 `fal` key，其他平台请使用方式 B 手动配置环境变量。
 
-### 方式 B：手动安装（推荐给多后端用户）
+### 方式 B：手动安装（推荐给多平台用户）
 
 ```bash
 git clone https://github.com/kevin1sMe/clawra-plus ~/.openclaw/skills/clawra-selfie
@@ -77,13 +83,17 @@ git clone https://github.com/kevin1sMe/clawra-plus ~/.openclaw/skills/clawra-sel
 ## 直接调用脚本
 
 ```bash
-npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen-image-plus"
+npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen" "generate"
+```
+
+```bash
+npx ts-node scripts/clawra-selfie.ts --list-models
 ```
 
 参数格式：
 
 ```text
-<prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
+<prompt> <channel> [caption] [aspect_ratio] [output_format] [platform] [operation] [model]
 ```
 
 ## 运行时输出（新版）
@@ -94,7 +104,7 @@ npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#gener
 - 生图耗时（`Generation time`）
 - 图片地址/文件（`Media`）
 
-其中 Hunyuan 后端任务超时策略为 120 秒，轮询频率为 1 秒。
+其中 Hunyuan 平台任务超时策略为 120 秒，轮询频率为 1 秒。
 
 ## 常用环境变量
 
@@ -121,6 +131,15 @@ TENCENT_AIART_ENDPOINT=aiart.tencentcloudapi.com
 
 # OpenClaw
 OPENCLAW_GATEWAY_TOKEN=your_token
+
+# 可选：设置平台默认模型
+DEFAULT_MODEL_QWEN_GENERATE=qwen-image-plus-2026-01-09
+DEFAULT_MODEL_QWEN_EDIT=qwen-image-edit-plus
+DEFAULT_MODEL_VOLC_GENERATE=doubao-seedream-4-0-250828
+DEFAULT_MODEL_VOLC_EDIT=doubao-seedream-4-0-250828
+DEFAULT_MODEL_FAL_GENERATE=xai/grok-imagine-image
+DEFAULT_MODEL_GOOGLE_GENERATE=gemini-3-pro-image-preview
+DEFAULT_MODEL_HUNYUAN_EDIT="aiart/v20221229 SubmitTextToImageJob"
 ```
 
 ## 项目结构

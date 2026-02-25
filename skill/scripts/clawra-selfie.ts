@@ -60,21 +60,7 @@ type AspectRatio =
 
 type OutputFormat = "jpeg" | "png" | "webp";
 type Operation = "generate" | "edit";
-type Provider = "qwen" | "volcengine" | "hunyuan" | "fal" | "google";
-type Backend =
-  | "qwen-image-plus"
-  | "qwen"
-  | "qwen-image-edit-plus"
-  | "volc-seedream"
-  | "seedream"
-  | "volc-seededit"
-  | "seededit"
-  | "hunyuan-image"
-  | "hunyuan"
-  | "fal"
-  | "google-nano-banana"
-  | "google-nano-banana-pro"
-  | "google";
+type Platform = "qwen" | "volc" | "hunyuan" | "fal" | "google";
 type MediaSource = "url" | "file";
 
 interface GenerateAndSendOptions {
@@ -83,8 +69,9 @@ interface GenerateAndSendOptions {
   caption?: string;
   aspectRatio?: AspectRatio;
   outputFormat?: OutputFormat;
-  backend?: Backend;
-  googleModel?: string;
+  platform?: Platform;
+  operation?: Operation;
+  model?: string;
   useOpenClawCLI?: boolean;
   useClaudeCodeCLI?: boolean;
 }
@@ -95,7 +82,8 @@ interface Result {
   imageSource: MediaSource;
   channel: string;
   prompt: string;
-  backend: Backend;
+  platform: Platform;
+  operation: Operation;
   model: string;
   generationTimeMs: number;
   revisedPrompt?: string;
@@ -104,26 +92,27 @@ interface Result {
 interface GeneratedImage {
   media: string;
   source: MediaSource;
-  backend: Backend;
   model: string;
   revisedPrompt?: string;
 }
 
-interface BackendExecutionOptions {
+interface PlatformExecutionOptions {
   prompt: string;
   aspectRatio: AspectRatio;
   outputFormat: OutputFormat;
-  modelOverride?: string;
-  backend: Backend;
+  model: string;
 }
 
-interface BackendSpec {
-  backend: Backend;
-  provider: Provider;
-  operation: Operation;
+interface OperationSpec {
+  models: string[];
   caption: string;
+  execute: (options: PlatformExecutionOptions) => Promise<GeneratedImage>;
+}
+
+interface PlatformSpec {
+  platform: Platform;
+  operations: Partial<Record<Operation, OperationSpec>>;
   ignoresOutputFormat?: boolean;
-  execute: (options: BackendExecutionOptions) => Promise<GeneratedImage>;
 }
 
 // Check for fal.ai client
@@ -223,187 +212,184 @@ async function resolveQwenEditImages(): Promise<string[]> {
   ];
 }
 
-function resolveGoogleModel(backend: Backend, override?: string): string {
-  if (override) return override;
-
-  if (backend === "google-nano-banana") {
-    return "gemini-2.5-flash-image";
-  }
-
-  return "gemini-3-pro-image-preview";
+function resolveGoogleModel(model: string): string {
+  return model;
 }
 
-const BACKEND_SPECS: Record<Backend, BackendSpec> = {
-  "qwen-image-plus": {
-    backend: "qwen-image-plus",
-    provider: "qwen",
-    operation: "generate",
-    caption: "Generated with Qwen Image",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithQwen({
-        prompt,
-        modelOverride,
-      }),
-  },
+const PLATFORM_SPECS: Record<Platform, PlatformSpec> = {
   qwen: {
-    backend: "qwen",
-    provider: "qwen",
-    operation: "generate",
-    caption: "Generated with Qwen Image",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithQwen({
-        prompt,
-        modelOverride,
-      }),
+    platform: "qwen",
+    operations: {
+      generate: {
+        models: ["qwen-image-plus-2026-01-09"],
+        caption: "Generated with Qwen Image",
+        execute: async ({ prompt, model }) =>
+          generateImageWithQwen({
+            prompt,
+            model,
+          }),
+      },
+      edit: {
+        models: ["qwen-image-edit-plus"],
+        caption: "Edited with Qwen Image",
+        execute: async ({ prompt, aspectRatio, model }) =>
+          generateImageWithQwenEdit({
+            prompt,
+            aspectRatio,
+            model,
+          }),
+      },
+    },
   },
-  "qwen-image-edit-plus": {
-    backend: "qwen-image-edit-plus",
-    provider: "qwen",
-    operation: "edit",
-    caption: "Edited with Qwen Image Edit",
-    execute: async ({ prompt, aspectRatio, modelOverride }) =>
-      generateImageWithQwenEdit({
-        prompt,
-        aspectRatio,
-        modelOverride,
-      }),
-  },
-  "volc-seedream": {
-    backend: "volc-seedream",
-    provider: "volcengine",
-    operation: "generate",
-    caption: "Generated with Seedream",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithSeedream({
-        prompt,
-        modelOverride,
-      }),
-  },
-  seedream: {
-    backend: "seedream",
-    provider: "volcengine",
-    operation: "generate",
-    caption: "Generated with Seedream",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithSeedream({
-        prompt,
-        modelOverride,
-      }),
-  },
-  "volc-seededit": {
-    backend: "volc-seededit",
-    provider: "volcengine",
-    operation: "edit",
-    caption: "Generated with Seedream Edit",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithSeededit({
-        prompt,
-        modelOverride,
-      }),
-  },
-  seededit: {
-    backend: "seededit",
-    provider: "volcengine",
-    operation: "edit",
-    caption: "Generated with Seedream Edit",
-    execute: async ({ prompt, modelOverride }) =>
-      generateImageWithSeededit({
-        prompt,
-        modelOverride,
-      }),
-  },
-  "hunyuan-image": {
-    backend: "hunyuan-image",
-    provider: "hunyuan",
-    operation: "edit",
-    caption: "Generated with Tencent Hunyuan Image",
-    execute: async ({ prompt, aspectRatio, outputFormat }) =>
-      generateImageWithHunyuan({
-        prompt,
-        aspectRatio,
-        outputFormat,
-      }),
-  },
-  hunyuan: {
-    backend: "hunyuan",
-    provider: "hunyuan",
-    operation: "edit",
-    caption: "Generated with Tencent Hunyuan Image",
-    execute: async ({ prompt, aspectRatio, outputFormat }) =>
-      generateImageWithHunyuan({
-        prompt,
-        aspectRatio,
-        outputFormat,
-      }),
+  volc: {
+    platform: "volc",
+    operations: {
+      generate: {
+        models: ["doubao-seedream-4-0-250828"],
+        caption: "Generated with Volc Seedream",
+        execute: async ({ prompt, model }) =>
+          generateImageWithSeedream({
+            prompt,
+            model,
+          }),
+      },
+      edit: {
+        models: ["doubao-seedream-4-0-250828"],
+        caption: "Edited with Volc Seedream",
+        execute: async ({ prompt, model }) =>
+          generateImageWithSeededit({
+            prompt,
+            model,
+          }),
+      },
+    },
   },
   fal: {
-    backend: "fal",
-    provider: "fal",
-    operation: "generate",
-    caption: "Generated with Grok Imagine",
-    execute: async ({ prompt, aspectRatio, outputFormat }) =>
-      generateImageWithFal({
-        prompt,
-        num_images: 1,
-        aspect_ratio: aspectRatio,
-        output_format: outputFormat,
-      }),
-  },
-  "google-nano-banana": {
-    backend: "google-nano-banana",
-    provider: "google",
-    operation: "generate",
-    caption: "Generated with Google Nano Banana",
-    ignoresOutputFormat: true,
-    execute: async ({ prompt, aspectRatio, backend, modelOverride }) =>
-      generateImageWithGoogle({
-        prompt,
-        aspectRatio,
-        backend,
-        googleModel: modelOverride,
-      }),
-  },
-  "google-nano-banana-pro": {
-    backend: "google-nano-banana-pro",
-    provider: "google",
-    operation: "generate",
-    caption: "Generated with Google Nano Banana",
-    ignoresOutputFormat: true,
-    execute: async ({ prompt, aspectRatio, backend, modelOverride }) =>
-      generateImageWithGoogle({
-        prompt,
-        aspectRatio,
-        backend,
-        googleModel: modelOverride,
-      }),
+    platform: "fal",
+    operations: {
+      generate: {
+        models: ["xai/grok-imagine-image"],
+        caption: "Generated with Grok Imagine",
+        execute: async ({ prompt, aspectRatio, outputFormat, model }) =>
+          generateImageWithFal({
+            prompt,
+            num_images: 1,
+            aspect_ratio: aspectRatio,
+            output_format: outputFormat,
+            model,
+          }),
+      },
+    },
   },
   google: {
-    backend: "google",
-    provider: "google",
-    operation: "generate",
-    caption: "Generated with Google Nano Banana",
+    platform: "google",
     ignoresOutputFormat: true,
-    execute: async ({ prompt, aspectRatio, backend, modelOverride }) =>
-      generateImageWithGoogle({
-        prompt,
-        aspectRatio,
-        backend,
-        googleModel: modelOverride,
-      }),
+    operations: {
+      generate: {
+        models: ["gemini-3-pro-image-preview", "gemini-2.5-flash-image"],
+        caption: "Generated with Google Image",
+        execute: async ({ prompt, aspectRatio, model }) =>
+          generateImageWithGoogle({
+            prompt,
+            aspectRatio,
+            model,
+          }),
+      },
+    },
+  },
+  hunyuan: {
+    platform: "hunyuan",
+    operations: {
+      edit: {
+        models: ["aiart/v20221229 SubmitTextToImageJob"],
+        caption: "Edited with Tencent Hunyuan Image",
+        execute: async ({ prompt, aspectRatio, outputFormat, model }) =>
+          generateImageWithHunyuan({
+            prompt,
+            aspectRatio,
+            outputFormat,
+            model,
+          }),
+      },
+    },
   },
 };
 
-function resolveBackendSpec(backend: Backend): BackendSpec {
-  return BACKEND_SPECS[backend];
+function assertPlatform(platform: string): asserts platform is Platform {
+  const supported = Object.keys(PLATFORM_SPECS) as Platform[];
+  if (!supported.includes(platform as Platform)) {
+    throw new Error(`Unsupported platform: ${platform}. Supported: ${supported.join(", ")}`);
+  }
 }
 
-function assertBackend(backend: string): asserts backend is Backend {
-  const supported = Object.keys(BACKEND_SPECS) as Backend[];
+function resolveDefaultOperation(platform: Platform): Operation {
+  const operations = PLATFORM_SPECS[platform].operations;
+  if (operations.generate) return "generate";
+  return "edit";
+}
 
-  if (!supported.includes(backend as Backend)) {
+function resolveOperationSpec(platform: Platform, operation: Operation): OperationSpec {
+  const opSpec = PLATFORM_SPECS[platform].operations[operation];
+  if (!opSpec) {
+    throw new Error(`Platform '${platform}' does not support operation '${operation}'`);
+  }
+  return opSpec;
+}
+
+function resolveDefaultModel(platform: Platform, operation: Operation): string {
+  const opSpec = resolveOperationSpec(platform, operation);
+  const envKey = `DEFAULT_MODEL_${platform.toUpperCase()}_${operation.toUpperCase()}`;
+  const envModel = process.env[envKey];
+
+  if (!envModel) {
+    return opSpec.models[0];
+  }
+
+  if (!opSpec.models.includes(envModel)) {
     throw new Error(
-      `Unsupported backend: ${backend}. Supported: ${supported.join(", ")}`
+      `${envKey}=${envModel} is not in supported models for ${platform}/${operation}: ${opSpec.models.join(", ")}`
     );
+  }
+
+  return envModel;
+}
+
+function resolveModel(platform: Platform, operation: Operation, model?: string): string {
+  const opSpec = resolveOperationSpec(platform, operation);
+  if (!model) {
+    return resolveDefaultModel(platform, operation);
+  }
+
+  if (!opSpec.models.includes(model)) {
+    throw new Error(
+      `Unsupported model '${model}' for ${platform}/${operation}. Supported: ${opSpec.models.join(", ")}`
+    );
+  }
+
+  return model;
+}
+
+function printModelCatalog(): void {
+  console.log("Supported platforms and models:\n");
+  const platforms = Object.keys(PLATFORM_SPECS) as Platform[];
+
+  for (const platform of platforms) {
+    const spec = PLATFORM_SPECS[platform];
+    console.log(`- ${platform}`);
+
+    const operations: Operation[] = ["generate", "edit"];
+    for (const operation of operations) {
+      const opSpec = spec.operations[operation];
+      if (!opSpec) continue;
+      const defaultModel = resolveDefaultModel(platform, operation);
+      console.log(`  - ${operation}`);
+      for (const model of opSpec.models) {
+        const label = model === defaultModel ? " (default)" : "";
+        console.log(`    - ${model}${label}`);
+      }
+      const envKey = `DEFAULT_MODEL_${platform.toUpperCase()}_${operation.toUpperCase()}`;
+      console.log(`    env override: ${envKey}`);
+    }
   }
 }
 
@@ -411,7 +397,7 @@ function assertBackend(backend: string): asserts backend is Backend {
  * Generate image using Grok Imagine via fal.ai
  */
 async function generateImageWithFal(
-  input: GrokImagineInput
+  input: GrokImagineInput & { model: string }
 ): Promise<GeneratedImage> {
   const falKey = process.env.FAL_KEY;
 
@@ -443,8 +429,7 @@ async function generateImageWithFal(
     return {
       media,
       source: "url",
-      backend: "fal",
-      model: "xai/grok-imagine-image",
+      model: input.model,
       revisedPrompt: data.revised_prompt,
     };
   }
@@ -478,8 +463,7 @@ async function generateImageWithFal(
   return {
     media,
     source: "url",
-    backend: "fal",
-    model: "xai/grok-imagine-image",
+    model: input.model,
     revisedPrompt: data.revised_prompt,
   };
 }
@@ -490,8 +474,7 @@ async function generateImageWithFal(
 async function generateImageWithGoogle(options: {
   prompt: string;
   aspectRatio: AspectRatio;
-  backend: Backend;
-  googleModel?: string;
+  model: string;
 }): Promise<GeneratedImage> {
   const googleApiKey = resolveGoogleApiKey();
   if (!googleApiKey) {
@@ -500,7 +483,7 @@ async function generateImageWithGoogle(options: {
     );
   }
 
-  const model = resolveGoogleModel(options.backend, options.googleModel);
+  const model = resolveGoogleModel(options.model);
 
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${googleApiKey}`,
@@ -571,7 +554,6 @@ async function generateImageWithGoogle(options: {
   return {
     media: outputPath,
     source: "file",
-    backend: options.backend,
     model,
     revisedPrompt,
   };
@@ -582,7 +564,7 @@ async function generateImageWithGoogle(options: {
  */
 async function generateImageWithQwen(options: {
   prompt: string;
-  modelOverride?: string;
+  model?: string;
 }): Promise<GeneratedImage> {
   const apiKey = resolveDashScopeApiKey();
   if (!apiKey) {
@@ -591,7 +573,7 @@ async function generateImageWithQwen(options: {
     );
   }
 
-  const model = resolveQwenModel(options.modelOverride);
+  const model = resolveQwenModel(options.model);
   const baseUrl = resolveDashScopeBaseUrl();
 
   const response = await fetch(
@@ -651,7 +633,6 @@ async function generateImageWithQwen(options: {
   return {
     media,
     source: "url",
-    backend: "qwen-image-plus",
     model,
     revisedPrompt,
   };
@@ -663,7 +644,7 @@ async function generateImageWithQwen(options: {
 async function generateImageWithQwenEdit(options: {
   prompt: string;
   aspectRatio: AspectRatio;
-  modelOverride?: string;
+  model?: string;
 }): Promise<GeneratedImage> {
   const apiKey = resolveDashScopeApiKey();
   if (!apiKey) {
@@ -672,7 +653,7 @@ async function generateImageWithQwenEdit(options: {
     );
   }
 
-  const model = resolveQwenEditModel(options.modelOverride);
+  const model = resolveQwenEditModel(options.model);
   const baseUrl = resolveDashScopeBaseUrl();
   const images = await resolveQwenEditImages();
 
@@ -734,7 +715,6 @@ async function generateImageWithQwenEdit(options: {
   return {
     media,
     source: "url",
-    backend: "qwen-image-edit-plus",
     model,
   };
 }
@@ -752,9 +732,7 @@ function resolveSeedreamModel(override?: string): string {
 }
 
 function resolveSeededitModel(override?: string): string {
-  // SeedEdit endpoint is deprecated in some regions.
-  // Use Seedream model family for /images/edits as fallback/default.
-  return override || process.env.SEEDREAM_EDIT_MODEL || "doubao-seedream-4-0-250828";
+  return override || "doubao-seedream-4-0-250828";
 }
 
 function assertNoDeprecatedModel(modelOverride?: string): void {
@@ -771,14 +749,14 @@ function assertNoDeprecatedModel(modelOverride?: string): void {
  */
 async function generateImageWithSeedream(options: {
   prompt: string;
-  modelOverride?: string;
+  model?: string;
 }): Promise<GeneratedImage> {
   const apiKey = resolveArkApiKey();
   if (!apiKey) {
     throw new Error("ARK API key missing. Set ARK_API_KEY or VOLCENGINE_API_KEY");
   }
 
-  const model = resolveSeedreamModel(options.modelOverride);
+  const model = resolveSeedreamModel(options.model);
   const baseUrl = resolveArkBaseUrl();
 
   const response = await fetch(`${baseUrl}/images/generations`, {
@@ -806,7 +784,6 @@ async function generateImageWithSeedream(options: {
   return {
     media,
     source: "url",
-    backend: "volc-seedream",
     model,
     revisedPrompt: data?.data?.[0]?.revised_prompt,
   };
@@ -818,14 +795,14 @@ async function generateImageWithSeedream(options: {
  */
 async function generateImageWithSeededit(options: {
   prompt: string;
-  modelOverride?: string;
+  model?: string;
 }): Promise<GeneratedImage> {
   const apiKey = resolveArkApiKey();
   if (!apiKey) {
     throw new Error("ARK API key missing. Set ARK_API_KEY or VOLCENGINE_API_KEY");
   }
 
-  const model = resolveSeededitModel(options.modelOverride);
+  const model = resolveSeededitModel(options.model);
   const baseUrl = resolveArkBaseUrl();
 
   const imageInput = await (async () => {
@@ -873,7 +850,6 @@ async function generateImageWithSeededit(options: {
   return {
     media,
     source: "url",
-    backend: "volc-seededit",
     model,
     revisedPrompt: data?.data?.[0]?.revised_prompt,
   };
@@ -936,6 +912,7 @@ async function generateImageWithHunyuan(options: {
   prompt: string;
   aspectRatio?: AspectRatio | string;
   outputFormat?: OutputFormat;
+  model?: string;
 }): Promise<GeneratedImage> {
   const secretId = process.env.TENCENT_SECRET_ID;
   const secretKey = process.env.TENCENT_SECRET_KEY;
@@ -1004,8 +981,7 @@ async function generateImageWithHunyuan(options: {
       return {
         media: queryResp.ResultImage[0],
         source: "url",
-        backend: "hunyuan-image",
-        model: "aiart/v20221229 SubmitTextToImageJob",
+        model: options.model || "aiart/v20221229 SubmitTextToImageJob",
       };
     }
   }
@@ -1059,40 +1035,43 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     channel,
     aspectRatio = "1:1",
     outputFormat = "jpeg",
-    backend = "qwen-image-plus",
-    googleModel,
+    platform = "qwen",
+    operation,
+    model,
   } = options;
 
   const useOpenClawCLI =
     options.useOpenClawCLI ?? options.useClaudeCodeCLI ?? true;
 
-  assertBackend(backend);
+  assertPlatform(platform);
+  const selectedOperation = operation || resolveDefaultOperation(platform);
+  const operationSpec = resolveOperationSpec(platform, selectedOperation);
+  const selectedModel = resolveModel(platform, selectedOperation, model);
 
-  const backendSpec = resolveBackendSpec(backend);
-  const caption = options.caption || backendSpec.caption;
+  assertNoDeprecatedModel(selectedModel);
+
+  const caption = options.caption || operationSpec.caption;
 
   console.log(`[INFO] Generating image...`);
-  console.log(`[INFO] Backend: ${backend}`);
-  console.log(
-    `[INFO] Provider: ${backendSpec.provider} (${backendSpec.operation})`
-  );
+  console.log(`[INFO] Platform: ${platform}`);
+  console.log(`[INFO] Operation: ${selectedOperation}`);
+  console.log(`[INFO] Model: ${selectedModel}`);
   console.log(`[INFO] Prompt: ${prompt}`);
   console.log(`[INFO] Aspect ratio: ${aspectRatio}`);
 
-  if (backendSpec.ignoresOutputFormat && outputFormat !== "png") {
+  if (PLATFORM_SPECS[platform].ignoresOutputFormat && outputFormat !== "png") {
     console.log(
-      `[WARN] ${backendSpec.provider} backend ignores outputFormat=${outputFormat}; output format is model-defined.`
+      `[WARN] ${platform} backend ignores outputFormat=${outputFormat}; output format is model-defined.`
     );
   }
 
   const generationStart = Date.now();
 
-  const generated = await backendSpec.execute({
+  const generated = await operationSpec.execute({
     prompt,
     aspectRatio,
     outputFormat,
-    modelOverride: googleModel,
-    backend,
+    model: selectedModel,
   });
 
   const generationTimeMs = Date.now() - generationStart;
@@ -1127,7 +1106,8 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     imageSource: generated.source,
     channel,
     prompt,
-    backend: generated.backend,
+    platform,
+    operation: selectedOperation,
     model: generated.model,
     generationTimeMs,
     revisedPrompt: generated.revisedPrompt,
@@ -1138,18 +1118,26 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
 async function main() {
   const args = process.argv.slice(2);
 
+  if (args[0] === "--list-models") {
+    printModelCatalog();
+    return;
+  }
+
   if (args.length < 2) {
     console.log(`
-Usage: npx ts-node clawra-selfie.ts <prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
+Usage:
+  npx ts-node clawra-selfie.ts --list-models
+  npx ts-node clawra-selfie.ts <prompt> <channel> [caption] [aspect_ratio] [output_format] [platform] [operation] [model]
 
 Arguments:
   prompt        - Image description (required)
   channel       - Target channel (required) e.g., #general, @user
-  caption       - Message caption (default: auto by backend)
+  caption       - Message caption (default: auto by platform/operation)
   aspect_ratio  - Image ratio (default: 1:1)
   output_format - Image format (fal only, default: jpeg)
-  backend       - qwen-image-plus | qwen | qwen-image-edit-plus | volc-seedream | seedream | volc-seededit | seededit | hunyuan-image | hunyuan | fal | google-nano-banana | google-nano-banana-pro | google (default: qwen-image-plus)
-  model_override- Optional model override (qwen/google/volc)
+  platform      - qwen | volc | fal | google | hunyuan (default: qwen)
+  operation     - generate | edit (default: first supported for platform)
+  model         - Full API model name (default: first model under platform/operation)
 
 Environment:
   DASHSCOPE_API_KEY        - Qwen backend key (or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY)
@@ -1168,26 +1156,36 @@ Environment:
   TENCENT_LOGO_ADD         - Add watermark 0|1 (default: 0)
   TENCENT_REVISE           - Prompt rewriting 0|1 (default: 1)
   TENCENT_SEED             - Optional random seed (integer)
-  SEEDREAM_EDIT_MODEL      - Optional model for seededit backend (default: doubao-seedream-4.0)
+  DEFAULT_MODEL_QWEN_GENERATE   - Default model for qwen/generate
+  DEFAULT_MODEL_QWEN_EDIT       - Default model for qwen/edit
+  DEFAULT_MODEL_VOLC_GENERATE   - Default model for volc/generate
+  DEFAULT_MODEL_VOLC_EDIT       - Default model for volc/edit
+  DEFAULT_MODEL_FAL_GENERATE    - Default model for fal/generate
+  DEFAULT_MODEL_GOOGLE_GENERATE - Default model for google/generate
+  DEFAULT_MODEL_HUNYUAN_EDIT    - Default model for hunyuan/edit
   OPENCLAW_GATEWAY_URL     - Optional gateway URL
   OPENCLAW_GATEWAY_TOKEN   - Optional gateway auth token
 
 Examples:
-  DASHSCOPE_API_KEY=*** npx ts-node clawra-selfie.ts "A stylish mirror selfie in a cafe" "#art" "Qwen selfie" "1:1" "png" "qwen-image-plus"
-  DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png npx ts-node clawra-selfie.ts "把人物换成电影海报风格" "#art" "Qwen edit" "3:4" "png" "qwen-image-edit-plus"
-  FAL_KEY=*** npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!" "1:1" "jpeg" "fal"
-  GOOGLE_API_KEY=*** npx ts-node clawra-selfie.ts "A cat astronaut" "#art" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
-  TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** npx ts-node clawra-selfie.ts "保持人物不变，换成城市夜景自拍" "#art" "Hunyuan edit" "1:1" "png" "hunyuan"
+  npx ts-node clawra-selfie.ts --list-models
+  DASHSCOPE_API_KEY=*** npx ts-node clawra-selfie.ts "A stylish mirror selfie" "#art" "Qwen" "1:1" "png" "qwen" "generate"
+  DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png npx ts-node clawra-selfie.ts "换成电影海报风格" "#art" "Qwen edit" "3:4" "png" "qwen" "edit" "qwen-image-edit-plus"
+  ARK_API_KEY=*** npx ts-node clawra-selfie.ts "城市夜景风格" "#art" "Volc" "1:1" "png" "volc" "edit" "doubao-seedream-4-0-250828"
+  GOOGLE_API_KEY=*** npx ts-node clawra-selfie.ts "A cat astronaut" "#art" "Google" "1:1" "png" "google" "generate" "gemini-3-pro-image-preview"
 `);
     process.exit(1);
   }
 
-  const [prompt, channel, caption, aspectRatio, outputFormat, backendArg, googleModel] = args;
-  const backend = (backendArg || "qwen-image-plus") as Backend;
+  const [prompt, channel, caption, aspectRatio, outputFormat, platformArg, operationArg, modelArg] = args;
+  const platform = (platformArg || "qwen") as Platform;
+  const operation = operationArg ? (operationArg as Operation) : undefined;
 
   try {
-    assertBackend(backend);
-    assertNoDeprecatedModel(googleModel);
+    assertPlatform(platform);
+    if (operation && operation !== "generate" && operation !== "edit") {
+      throw new Error(`Unsupported operation: ${operation}. Use 'generate' or 'edit'`);
+    }
+    assertNoDeprecatedModel(modelArg);
 
     const result = await generateAndSend({
       prompt,
@@ -1195,8 +1193,9 @@ Examples:
       caption,
       aspectRatio: (aspectRatio as AspectRatio) || "1:1",
       outputFormat: (outputFormat as OutputFormat) || "jpeg",
-      backend,
-      googleModel,
+      platform,
+      operation,
+      model: modelArg,
     });
 
     console.log("\n--- Result ---");
@@ -1224,7 +1223,7 @@ export {
   OpenClawMessage,
   GenerateAndSendOptions,
   Result,
-  Backend,
+  Platform,
 };
 
 // Run if executed directly

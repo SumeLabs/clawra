@@ -29,43 +29,53 @@ https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png
 ### 必需的环境变量
 
 ```bash
-FAL_KEY=your_fal_api_key               # fal 后端
-GOOGLE_API_KEY=your_google_api_key     # google 后端（或 GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY）
-TENCENT_SECRET_ID=your_secret_id        # hunyuan 后端
-TENCENT_SECRET_KEY=your_secret_key      # hunyuan 后端
+FAL_KEY=your_fal_api_key               # fal 平台
+GOOGLE_API_KEY=your_google_api_key     # google 平台（或 GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY）
+TENCENT_SECRET_ID=your_secret_id        # hunyuan 平台
+TENCENT_SECRET_KEY=your_secret_key      # hunyuan 平台
 OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gateway-token
 ```
 
 ### 工作流程
 
 1. **获取用户提示词**：生成/编辑的上下文描述
-2. **选择后端**：`qwen-image-plus`（默认）/ `qwen-image-edit-plus` / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
-3. **生成图片**：通过选定的后端生成
+2. **选择平台 + 操作**：`qwen|volc|fal|google|hunyuan` + `generate|edit`
+3. **生成/编辑图片**：通过选定模型执行
 4. **发送到 OpenClaw**：指定目标频道
 
-### 脚本后端
+### 脚本平台
 
 核心实现为 TypeScript：`scripts/clawra-selfie.ts`（`scripts/clawra-selfie.sh` 仅作兼容转发）。
 
-支持的后端：
+支持的平台与模型（使用完整 API 名称）：
 
-- `qwen-image-plus`（默认）：调用阿里巴巴 DashScope `qwen-image-plus-2026-01-09`（或覆盖模型）
-- `qwen-image-edit-plus`：调用阿里巴巴 DashScope `qwen-image-edit-plus` 做参考图编辑
-- `volc-seedream`/`seedream`：调用火山引擎 Ark 文生图（`/images/generations`）
-- `volc-seededit`/`seededit`：调用火山引擎 Ark 图片编辑（`/images/edits`），使用 Clawra 参考图片
-- `fal`：在 fal.ai 上调用 `xai/grok-imagine-image`（返回图片 URL）
-- `hunyuan-image`/`hunyuan`：在 `aiart.tencentcloudapi.com` 上调用腾讯云 AIART 混元图像 3.0（`SubmitTextToImageJob` + `QueryTextToImageJob`），以 Clawra 参考图片作为 `Images`
-- `google-nano-banana`：调用 Google `gemini-2.5-flash-image`（返回内联图片数据，脚本存储到临时文件）
-- `google-nano-banana-pro`：调用 Google `gemini-3-pro-image-preview`（返回内联图片数据，脚本存储到临时文件）
+- `qwen`
+  - `generate`: `qwen-image-plus-2026-01-09`（默认）
+  - `edit`: `qwen-image-edit-plus`（默认）
+- `volc`
+  - `generate`: `doubao-seedream-4-0-250828`（默认）
+  - `edit`: `doubao-seedream-4-0-250828`（默认）
+- `fal`
+  - `generate`: `xai/grok-imagine-image`（默认）
+- `google`
+  - `generate`: `gemini-3-pro-image-preview`（默认）、`gemini-2.5-flash-image`
+- `hunyuan`
+  - `edit`: `aiart/v20221229 SubmitTextToImageJob`（默认）
+
+可用以下命令查看当前完整目录：
+
+```bash
+npx ts-node scripts/clawra-selfie.ts --list-models
+```
 
 TypeScript 示例：
 
 ```bash
-# fal 后端
-FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk selfie" "#general" "AI selfie" "1:1" "jpeg" "fal"
+# fal 平台（generate）
+FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk selfie" "#general" "AI selfie" "1:1" "jpeg" "fal" "generate" "xai/grok-imagine-image"
 
-# Google nano-banana-pro 后端
-GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#general" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
+# google 平台（generate）
+GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#general" "Nano Banana" "1:1" "png" "google" "generate" "gemini-3-pro-image-preview"
 ```
 
 ## 分步说明
@@ -183,28 +193,28 @@ curl -X POST "http://localhost:18789/message" \
 脚本位置参数：
 
 ```
-<prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
+<prompt> <channel> [caption] [aspect_ratio] [output_format] [platform] [operation] [model]
 ```
 
 ### TypeScript 脚本（`scripts/clawra-selfie.ts`）
 
 ```bash
-# 默认 backend（qwen-image-plus）
-DASHSCOPE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+# qwen 平台 generate（默认模型）
+DASHSCOPE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes" "1:1" "png" "qwen" "generate"
 
-# qwen-image-edit-plus（参考图编辑）
+# qwen 平台 edit（显式模型）
 DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
-  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
+  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen" "edit" "qwen-image-edit-plus"
 
-# fal backend
-FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
+# fal 平台 generate
+FAL_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok" "1:1" "jpeg" "fal" "generate" "xai/grok-imagine-image"
 
-# Google nano-banana-pro
-GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Nano Banana" "1:1" "png" "google-nano-banana-pro"
+# google 平台 generate
+GOOGLE_API_KEY=*** npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Pro" "1:1" "png" "google" "generate" "gemini-3-pro-image-preview"
 
-# Hunyuan 图片编辑
+# hunyuan 平台 edit
 TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
+  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan" "edit" "aiart/v20221229 SubmitTextToImageJob"
 ```
 
 ## 支持的平台

@@ -29,12 +29,12 @@ https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png
 ### Required Environment Variables
 
 ```bash
-DASHSCOPE_API_KEY=your_key             # qwen-image-plus backend (or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY)
-ARK_API_KEY=your_key                   # volc-seedream / volc-seededit backend (or VOLCENGINE_API_KEY)
-FAL_KEY=your_fal_api_key               # fal backend
-GOOGLE_API_KEY=your_google_api_key     # google backend (or GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY)
-TENCENT_SECRET_ID=your_secret_id       # hunyuan backend
-TENCENT_SECRET_KEY=your_secret_key     # hunyuan backend
+DASHSCOPE_API_KEY=your_key             # qwen platform (or ALIBABA_CLOUD_MODEL_STUDIO_API_KEY)
+ARK_API_KEY=your_key                   # volc platform (or VOLCENGINE_API_KEY)
+FAL_KEY=your_fal_api_key               # fal platform
+GOOGLE_API_KEY=your_google_api_key     # google platform (or GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY)
+TENCENT_SECRET_ID=your_secret_id       # hunyuan platform
+TENCENT_SECRET_KEY=your_secret_key     # hunyuan platform
 # TENCENT_REFERENCE_IMAGE_URL=url      # optional, overrides default Clawra CDN image
 # TENCENT_RESOLUTION=1024:1024         # optional
 # TENCENT_REVISE=1                     # optional, prompt rewriting (default: 1)
@@ -45,24 +45,30 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # From: openclaw doctor --generate-gatewa
 ### Workflow
 
 1. **Get user prompt** for generation/editing context
-2. **Choose backend**: `qwen-image-plus` (default) / `qwen-image-edit-plus` / `volc-seedream` / `volc-seededit` / `hunyuan-image` / `fal` / `google-nano-banana` / `google-nano-banana-pro`
-3. **Generate image** via selected backend
+2. **Choose platform + operation**: `qwen|volc|fal|google|hunyuan` + `generate|edit`
+3. **Generate/edit image** via selected model
 4. **Send to OpenClaw** with target channel(s)
 
-### Script Backends
+### Script Platforms
 
 Core implementation is TypeScript in `scripts/clawra-selfie.ts` (`scripts/clawra-selfie.sh` is a wrapper that forwards to TS).
 
-Supported backends:
+Supported platforms and full model names:
 
-- `qwen-image-plus` (default): calls Alibaba DashScope `qwen-image-plus-2026-01-09` (or override model)
-- `qwen-image-edit-plus`: calls Alibaba DashScope `qwen-image-edit-plus` for reference-image editing
-- `volc-seedream`/`seedream`: calls Volcengine Ark text-to-image (`/images/generations`)
-- `volc-seededit`/`seededit`: calls Volcengine Ark image edit (`/images/edits`) using Clawra reference image
-- `fal`: calls `xai/grok-imagine-image` on fal.ai (returns image URL)
-- `hunyuan-image`/`hunyuan`: calls Tencent Hunyuan Image 3.0 (`SubmitTextToImageJob` + polls `QueryTextToImageJob`) on `aiart.tencentcloudapi.com`; passes Clawra reference image URL via `Images[]`; async job, polls every 1s up to 120s
-- `google-nano-banana`: calls Google `gemini-2.5-flash-image` (returns inline image data, script stores to temp file)
-- `google-nano-banana-pro`: calls Google `gemini-3-pro-image-preview` (returns inline image data, script stores to temp file)
+- `qwen`
+  - `generate`: `qwen-image-plus-2026-01-09` (default)
+  - `edit`: `qwen-image-edit-plus` (default)
+- `volc`
+  - `generate`: `doubao-seedream-4-0-250828` (default)
+  - `edit`: `doubao-seedream-4-0-250828` (default)
+- `fal`
+  - `generate`: `xai/grok-imagine-image` (default)
+- `google`
+  - `generate`: `gemini-3-pro-image-preview` (default), `gemini-2.5-flash-image`
+- `hunyuan`
+  - `edit`: `aiart/v20221229 SubmitTextToImageJob` (default)
+
+Use `npx ts-node scripts/clawra-selfie.ts --list-models` to print the latest catalog.
 
 ## Step-by-Step Instructions
 
@@ -179,43 +185,43 @@ curl -X POST "http://localhost:18789/message" \
 Script arguments:
 
 ```
-<prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
+<prompt> <channel> [caption] [aspect_ratio] [output_format] [platform] [operation] [model]
 ```
 
 Use TypeScript directly via `npx ts-node scripts/clawra-selfie.ts`.
 
 ```bash
-# qwen-image-plus (default) — DASHSCOPE_API_KEY
+# qwen generate (default model) — DASHSCOPE_API_KEY
 DASHSCOPE_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes"
+  npx ts-node scripts/clawra-selfie.ts "wearing a santa hat, mirror selfie" "#general" "Holiday vibes" "1:1" "png" "qwen" "generate"
 
-# qwen-image-edit-plus (reference image edit) — DASHSCOPE_API_KEY
+# qwen edit (explicit model) — DASHSCOPE_API_KEY
 DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
-  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen-image-edit-plus"
+  npx ts-node scripts/clawra-selfie.ts "换成电影海报风格" "#general" "Qwen Edit" "3:4" "png" "qwen" "edit" "qwen-image-edit-plus"
 
-# volc-seedream (text-to-image) — ARK_API_KEY
+# volc generate — ARK_API_KEY
 ARK_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc-seedream"
+  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc" "generate" "doubao-seedream-4-0-250828"
 
-# volc-seededit (image edit with reference) — ARK_API_KEY
+# volc edit — ARK_API_KEY
 ARK_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc-seededit"
+  npx ts-node scripts/clawra-selfie.ts "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc" "edit" "doubao-seedream-4-0-250828"
 
-# fal (xAI Grok Imagine) — FAL_KEY
+# fal generate — FAL_KEY
 FAL_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok edit" "1:1" "jpeg" "fal"
+  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok" "1:1" "jpeg" "fal" "generate" "xai/grok-imagine-image"
 
-# hunyuan (Tencent image edit) — TENCENT_SECRET_ID + TENCENT_SECRET_KEY
+# hunyuan edit — TENCENT_SECRET_ID + TENCENT_SECRET_KEY
 TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan"
+  npx ts-node scripts/clawra-selfie.ts "城市夜景自拍" "#general" "Hunyuan" "1:1" "png" "hunyuan" "edit" "aiart/v20221229 SubmitTextToImageJob"
 
-# google-nano-banana — GOOGLE_API_KEY
+# google generate (pro) — GOOGLE_API_KEY
 GOOGLE_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Flash" "1:1" "png" "google-nano-banana"
+  npx ts-node scripts/clawra-selfie.ts "a cozy cafe selfie" "#photos" "Pro" "1:1" "png" "google" "generate" "gemini-3-pro-image-preview"
 
-# google-nano-banana-pro — GOOGLE_API_KEY
+# google generate (flash) — GOOGLE_API_KEY
 GOOGLE_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#photos" "Nano Banana Pro" "1:1" "png" "google-nano-banana-pro"
+  npx ts-node scripts/clawra-selfie.ts "a cat astronaut selfie" "#photos" "Flash" "1:1" "png" "google" "generate" "gemini-2.5-flash-image"
 ```
 
 ## Supported Platforms

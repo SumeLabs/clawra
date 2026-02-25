@@ -16,17 +16,23 @@ This repository is an upgraded fork of the original Clawra project. The main goa
 - Bilingual skill docs: `SKILL.md` and `SKILL_CN.md`
 - OpenClaw delivery flow preserved: generated images can be sent to Discord/Telegram/WhatsApp/Slack, etc.
 
-## Backend Matrix
+## Platform and Model Matrix
 
-| Backend | Purpose | Required Config |
-|---|---|---|
-| `qwen-image-plus` / `qwen` | Text-to-image (default) | `DASHSCOPE_API_KEY` |
-| `qwen-image-edit-plus` | Image edit with reference image (Qwen) | `DASHSCOPE_API_KEY` |
-| `volc-seedream` / `seedream` | Text-to-image | `ARK_API_KEY` |
-| `volc-seededit` / `seededit` | Image edit with reference image | `ARK_API_KEY` |
-| `hunyuan-image` / `hunyuan` | Tencent Hunyuan Image 3.0 (async job) | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
-| `fal` | xAI Grok Imagine | `FAL_KEY` |
-| `google-nano-banana` / `google-nano-banana-pro` / `google` | Google image models | `GOOGLE_API_KEY` |
+The script now uses a unified structure: `platform -> operation(generate/edit) -> model(full API name)`.
+
+| Platform | Operation | Default model (full API name) | Required Config |
+|---|---|---|---|
+| `qwen` | `generate` / `edit` | `qwen-image-plus-2026-01-09` / `qwen-image-edit-plus` | `DASHSCOPE_API_KEY` |
+| `volc` | `generate` / `edit` | `doubao-seedream-4-0-250828` / `doubao-seedream-4-0-250828` | `ARK_API_KEY` |
+| `fal` | `generate` | `xai/grok-imagine-image` | `FAL_KEY` |
+| `google` | `generate` | `gemini-3-pro-image-preview` | `GOOGLE_API_KEY` |
+| `hunyuan` | `edit` | `aiart/v20221229 SubmitTextToImageJob` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
+
+List all supported models:
+
+```bash
+npx ts-node scripts/clawra-selfie.ts --list-models
+```
 
 ## Quick Start
 
@@ -43,9 +49,9 @@ The installer will:
 3. Update `~/.openclaw/openclaw.json`
 4. Inject the required persona template
 
-Note: current installer flow guides `fal` key setup by default. For other backends, use Option B and configure env vars manually.
+Note: current installer flow guides `fal` key setup by default. For other platforms, use Option B and configure env vars manually.
 
-### Option B: Manual install (recommended for multi-backend users)
+### Option B: Manual install (recommended for multi-platform users)
 
 ```bash
 git clone https://github.com/kevin1sMe/clawra-plus ~/.openclaw/skills/clawra-selfie
@@ -77,13 +83,17 @@ Then enable it in `~/.openclaw/openclaw.json`:
 ## Run Scripts Directly
 
 ```bash
-npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen-image-plus"
+npx ts-node scripts/clawra-selfie.ts "A stylish mirror selfie in a cafe" "#general" "Qwen" "1:1" "png" "qwen" "generate"
+```
+
+```bash
+npx ts-node scripts/clawra-selfie.ts --list-models
 ```
 
 Argument format:
 
 ```text
-<prompt> <channel> [caption] [aspect_ratio] [output_format] [backend] [model_override]
+<prompt> <channel> [caption] [aspect_ratio] [output_format] [platform] [operation] [model]
 ```
 
 ## Runtime Output (Upgraded)
@@ -94,7 +104,7 @@ Each generation now reports:
 - `Generation time`
 - `Media`
 
-For Hunyuan backend, timeout is 120 seconds with 1-second polling intervals.
+For Hunyuan platform, timeout is 120 seconds with 1-second polling intervals.
 
 ## Common Environment Variables
 
@@ -121,6 +131,15 @@ TENCENT_AIART_ENDPOINT=aiart.tencentcloudapi.com
 
 # OpenClaw
 OPENCLAW_GATEWAY_TOKEN=your_token
+
+# Optional: set default model per platform/operation
+DEFAULT_MODEL_QWEN_GENERATE=qwen-image-plus-2026-01-09
+DEFAULT_MODEL_QWEN_EDIT=qwen-image-edit-plus
+DEFAULT_MODEL_VOLC_GENERATE=doubao-seedream-4-0-250828
+DEFAULT_MODEL_VOLC_EDIT=doubao-seedream-4-0-250828
+DEFAULT_MODEL_FAL_GENERATE=xai/grok-imagine-image
+DEFAULT_MODEL_GOOGLE_GENERATE=gemini-3-pro-image-preview
+DEFAULT_MODEL_HUNYUAN_EDIT="aiart/v20221229 SubmitTextToImageJob"
 ```
 
 ## Project Structure
