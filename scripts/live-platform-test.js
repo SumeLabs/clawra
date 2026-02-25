@@ -25,7 +25,7 @@ const PLATFORM_CAPS = {
   volc: ["generate", "edit"],
   qwen: ["generate", "edit"],
   google: ["generate"],
-  hunyuan: ["edit"],
+  hunyuan: ["generate", "edit"],
 };
 
 const DEFAULT_MODELS = {
@@ -45,6 +45,7 @@ const DEFAULT_MODELS = {
     generate: "gemini-3-pro-image-preview",
   },
   hunyuan: {
+    generate: "aiart/v20221229 SubmitTextToImageJob",
     edit: "aiart/v20221229 SubmitTextToImageJob",
   },
 };
@@ -158,7 +159,6 @@ function inferOperationFromModel(model) {
   const text = model.toLowerCase();
   if (text.endsWith("/edit")) return "edit";
   if (text.includes("qwen-image-edit")) return "edit";
-  if (text.includes("submittexttoimagejob") || text.includes("aiart/")) return "edit";
   return undefined;
 }
 
@@ -270,6 +270,15 @@ async function runSingleOperation({
   }
   if (platform === "google" && operation === "generate") {
     return generateImageWithGoogle({ prompt, model, aspectRatio });
+  }
+  if (platform === "hunyuan" && operation === "generate") {
+    return generateImageWithHunyuan({
+      prompt,
+      model,
+      aspectRatio,
+      outputFormat,
+      referenceImage: null,
+    });
   }
   if (platform === "hunyuan" && operation === "edit") {
     return generateImageWithHunyuan({ prompt, model, aspectRatio, outputFormat });

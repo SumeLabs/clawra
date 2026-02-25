@@ -82,6 +82,7 @@ test("supported platform/operation combinations are wired", async () => {
     { platform: "fal", operation: "generate", error: /FAL_KEY environment variable not set/ },
     { platform: "fal", operation: "edit", error: /FAL_KEY environment variable not set/ },
     { platform: "google", operation: "generate", error: /Google API key missing/ },
+    { platform: "hunyuan", operation: "generate", error: /Tencent credentials missing/ },
     { platform: "hunyuan", operation: "edit", error: /Tencent credentials missing/ },
   ];
 
@@ -116,10 +117,10 @@ test("unsupported platform/operation combinations fail fast", async () => {
       prompt: "test prompt",
       channel: "#general",
       platform: "hunyuan",
-      operation: "generate",
+      operation: "both",
       useOpenClawCLI: false,
     }),
-    /does not support operation 'generate'/
+    /does not support operation 'both'/
   );
 });
 
@@ -244,9 +245,30 @@ test("Volc Seedream edit sends image-edit payload", async () => {
   assert.equal(body.prompt, "change to beach vacation style");
   assert.equal(body.image, "https://img.example/seedream-input.png");
   assert.equal(body.response_format, "url");
-  assert.equal(body.size, "640x960");
+  assert.equal(body.size, "1568x2352");
   assert.equal(result.media, "https://img.example/seedream-edit.png");
   assert.equal(result.source, "url");
+});
+
+test("Volc Seedream edit uses compliant fallback size when unset", async () => {
+  process.env.ARK_API_KEY = "ark-key";
+  process.env.SEEDREAM_EDIT_IMAGE_URL = "https://img.example/seedream-input.png";
+
+  const calls = [];
+  installFetchQueue(
+    [makeResponse({ data: [{ url: "https://img.example/seedream-edit-default-size.png" }] })],
+    calls
+  );
+
+  const result = await generateImageWithSeededit({
+    prompt: "change to beach vacation style",
+    model: "doubao-seedream-4-5-251128",
+  });
+
+  assert.equal(calls.length, 1);
+  const body = JSON.parse(calls[0].options.body);
+  assert.equal(body.size, "2048x2048");
+  assert.equal(result.media, "https://img.example/seedream-edit-default-size.png");
 });
 
 test("fal generate/edit call subscribe with expected inputs", async () => {
@@ -401,6 +423,48 @@ test("Hunyuan edit builds submit/query calls correctly", async () => {
     assert.equal(result.media, "https://img.example/hunyuan-edit.png");
     assert.equal(result.source, "url");
     assert.equal(result.model, "aiart/v20221229 SubmitTextToImageJob");
+  } finally {
+    aiart.Client = originalClient;
+    global.setTimeout = originalSetTimeout;
+  }
+});
+
+test("Hunyuan generate omits reference image in submit payload", async () => {
+  process.env.TENCENT_SECRET_ID = "secret-id";
+  process.env.TENCENT_SECRET_KEY = "secret-key";
+  process.env.TENCENT_REFERENCE_IMAGE_URL = "https://img.example/hunyuan-ref.png";
+
+  const aiart = tencentcloud.aiart.v20221229;
+  const originalClient = aiart.Client;
+  const originalSetTimeout = global.setTimeout;
+
+  let submitPayload;
+
+  aiart.Client = class FakeAiartClient {
+    async SubmitTextToImageJob(payload) {
+      submitPayload = payload;
+      return { JobId: "job-2" };
+    }
+
+    async QueryTextToImageJob() {
+      return { JobStatusCode: "5", ResultImage: ["https://img.example/hunyuan-generate.png"] };
+    }
+  };
+
+  global.setTimeout = (fn, _ms, ...args) => originalSetTimeout(fn, 0, ...args);
+
+  try {
+    const result = await generateImageWithHunyuan({
+      prompt: "城市夜景",
+      aspectRatio: "1:1",
+      referenceImage: null,
+    });
+
+    assert.equal(submitPayload.Prompt, "城市夜景");
+    assert.equal(submitPayload.Resolution, "1024:1024");
+    assert.equal("Images" in submitPayload, false);
+    assert.equal(result.media, "https://img.example/hunyuan-generate.png");
+    assert.equal(result.source, "url");
   } finally {
     aiart.Client = originalClient;
     global.setTimeout = originalSetTimeout;

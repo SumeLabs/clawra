@@ -26,7 +26,7 @@
 | `volc` | `generate` / `edit` | `doubao-seedream-5-0-260128` / `doubao-seedream-5-0-260128` | `ARK_API_KEY` |
 | `fal` | `generate` / `edit` | `xai/grok-imagine-image` / `xai/grok-imagine-image/edit` | `FAL_KEY` |
 | `google` | `generate` | `gemini-3-pro-image-preview` | `GOOGLE_API_KEY` |
-| `hunyuan` | `edit` | `aiart/v20221229 SubmitTextToImageJob` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
+| `hunyuan` | `generate` / `edit` | `aiart/v20221229 SubmitTextToImageJob` / `aiart/v20221229 SubmitTextToImageJob` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
 
 查看完整模型列表：
 
@@ -142,6 +142,7 @@ DEFAULT_MODEL_VOLC_EDIT=doubao-seedream-5-0-260128
 DEFAULT_MODEL_FAL_GENERATE=xai/grok-imagine-image
 DEFAULT_MODEL_FAL_EDIT=xai/grok-imagine-image/edit
 DEFAULT_MODEL_GOOGLE_GENERATE=gemini-3-pro-image-preview
+DEFAULT_MODEL_HUNYUAN_GENERATE="aiart/v20221229 SubmitTextToImageJob"
 DEFAULT_MODEL_HUNYUAN_EDIT="aiart/v20221229 SubmitTextToImageJob"
 ```
 

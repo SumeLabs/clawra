@@ -339,6 +339,18 @@ const PLATFORM_SPECS: Record<Platform, PlatformSpec> = {
   hunyuan: {
     platform: "hunyuan",
     operations: {
+      generate: {
+        models: ["aiart/v20221229 SubmitTextToImageJob"],
+        caption: "Generated with Tencent Hunyuan Image",
+        execute: async ({ prompt, aspectRatio, outputFormat, model }) =>
+          generateImageWithHunyuan({
+            prompt,
+            aspectRatio,
+            outputFormat,
+            model,
+            referenceImage: null,
+          }),
+      },
       edit: {
         models: ["aiart/v20221229 SubmitTextToImageJob"],
         caption: "Edited with Tencent Hunyuan Image",
@@ -851,6 +863,33 @@ function resolveSeededitModel(override?: string): string {
   return override || "doubao-seedream-5-0-260128";
 }
 
+const SEEDREAM_EDIT_MIN_PIXELS = 3_686_400;
+const SEEDREAM_EDIT_FALLBACK_SIZE = "2048x2048";
+
+function normalizeSeedreamEditSize(rawSize?: string): string {
+  const value = rawSize?.trim() || "";
+  const match = /^(\d+)\s*[x*]\s*(\d+)$/i.exec(value);
+  if (!match) {
+    return SEEDREAM_EDIT_FALLBACK_SIZE;
+  }
+
+  let width = Number(match[1]);
+  let height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return SEEDREAM_EDIT_FALLBACK_SIZE;
+  }
+
+  const pixels = width * height;
+  if (pixels >= SEEDREAM_EDIT_MIN_PIXELS) {
+    return `${width}x${height}`;
+  }
+
+  const scale = Math.sqrt(SEEDREAM_EDIT_MIN_PIXELS / pixels);
+  width = Math.ceil(width * scale);
+  height = Math.ceil(height * scale);
+  return `${width}x${height}`;
+}
+
 function assertNoDeprecatedModel(modelOverride?: string): void {
   if (!modelOverride) return;
   if (/seededit3|seededit-3|seed-edit-3/i.test(modelOverride)) {
@@ -944,7 +983,7 @@ async function generateImageWithSeededit(options: {
       prompt: options.prompt,
       image: imageInput,
       response_format: "url",
-      size: process.env.SEEDREAM_EDIT_SIZE || "1024x1024",
+      size: normalizeSeedreamEditSize(process.env.SEEDREAM_EDIT_SIZE),
     }),
   });
 
@@ -1021,14 +1060,16 @@ function aspectRatioToHunyuanResolution(ratio: string): string {
 }
 
 /**
- * Generate image using Tencent Hunyuan Image 3.0 (SubmitTextToImageJob + QueryTextToImageJob).
- * Passes the Clawra reference image URL via Images[] as a reference/pad image.
+ * Generate/edit image using Tencent Hunyuan Image 3.0
+ * (SubmitTextToImageJob + QueryTextToImageJob).
+ * If referenceImage is null, Images[] is omitted (text-to-image mode).
  */
 async function generateImageWithHunyuan(options: {
   prompt: string;
   aspectRatio?: AspectRatio | string;
   outputFormat?: OutputFormat;
   model?: string;
+  referenceImage?: string | null;
 }): Promise<GeneratedImage> {
   const secretId = process.env.TENCENT_SECRET_ID;
   const secretKey = process.env.TENCENT_SECRET_KEY;
@@ -1054,21 +1095,27 @@ async function generateImageWithHunyuan(options: {
     profile: { httpProfile: { endpoint } },
   });
 
-  const refUrl =
-    process.env.TENCENT_REFERENCE_IMAGE_URL ||
-    "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png";
-
   const resolution =
     process.env.TENCENT_RESOLUTION ||
     (options.aspectRatio ? aspectRatioToHunyuanResolution(options.aspectRatio) : "640:960");
 
   const submitParams: Record<string, unknown> = {
     Prompt: options.prompt,
-    Images: [refUrl],
     Resolution: resolution,
     LogoAdd: Number(process.env.TENCENT_LOGO_ADD ?? "0"),
     Revise: process.env.TENCENT_REVISE === "0" ? 0 : 1,
   };
+
+  const defaultReferenceImage =
+    process.env.TENCENT_REFERENCE_IMAGE_URL ||
+    "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png";
+  const referenceImage =
+    options.referenceImage === null
+      ? undefined
+      : (options.referenceImage?.trim() || defaultReferenceImage);
+  if (referenceImage) {
+    submitParams.Images = [referenceImage];
+  }
 
   if (process.env.TENCENT_SEED) {
     submitParams.Seed = Number(process.env.TENCENT_SEED);
@@ -1269,7 +1316,7 @@ Environment:
   TENCENT_SECRET_KEY       - Tencent Cloud SecretKey (hunyuan backend)
   TENCENT_REGION           - Tencent region (default: ap-guangzhou)
   TENCENT_AIART_ENDPOINT   - Tencent aiart endpoint override (default: aiart.tencentcloudapi.com)
-  TENCENT_REFERENCE_IMAGE_URL - Reference image URL passed as Images[0] (default: Clawra CDN URL)
+  TENCENT_REFERENCE_IMAGE_URL - Optional reference image URL for hunyuan edit (default: Clawra CDN URL)
   TENCENT_RESOLUTION       - Image resolution (default: 1024:1024)
   TENCENT_LOGO_ADD         - Add watermark 0|1 (default: 0)
   TENCENT_REVISE           - Prompt rewriting 0|1 (default: 1)
@@ -1281,6 +1328,7 @@ Environment:
   DEFAULT_MODEL_FAL_GENERATE    - Default model for fal/generate
   DEFAULT_MODEL_FAL_EDIT        - Default model for fal/edit
   DEFAULT_MODEL_GOOGLE_GENERATE - Default model for google/generate
+  DEFAULT_MODEL_HUNYUAN_GENERATE - Default model for hunyuan/generate
   DEFAULT_MODEL_HUNYUAN_EDIT    - Default model for hunyuan/edit
   OPENCLAW_GATEWAY_URL     - Optional gateway URL
   OPENCLAW_GATEWAY_TOKEN   - Optional gateway auth token
