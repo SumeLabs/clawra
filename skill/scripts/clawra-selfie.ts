@@ -23,6 +23,13 @@ interface GrokImagineInput {
   output_format?: OutputFormat;
 }
 
+interface GrokImagineEditInput {
+  prompt: string;
+  image_url: string;
+  num_images?: number;
+  output_format?: OutputFormat;
+}
+
 interface GrokImagineImage {
   url: string;
   content_type: string;
@@ -212,6 +219,20 @@ async function resolveQwenEditImages(): Promise<string[]> {
   ];
 }
 
+async function resolveFalEditImage(): Promise<string> {
+  if (process.env.FAL_EDIT_IMAGE_PATH) {
+    const imagePath = process.env.FAL_EDIT_IMAGE_PATH;
+    const data = await fs.readFile(imagePath);
+    const mimeType = detectImageMimeType(imagePath);
+    return `data:${mimeType};base64,${data.toString("base64")}`;
+  }
+
+  return (
+    process.env.FAL_EDIT_IMAGE_URL ||
+    "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png"
+  );
+}
+
 function resolveGoogleModel(model: string): string {
   return model;
 }
@@ -245,7 +266,11 @@ const PLATFORM_SPECS: Record<Platform, PlatformSpec> = {
     platform: "volc",
     operations: {
       generate: {
-        models: ["doubao-seedream-4-0-250828"],
+        models: [
+          "doubao-seedream-5-0-260128",
+          "doubao-seedream-4-5-251128",
+          "doubao-seedream-4-0-250828",
+        ],
         caption: "Generated with Volc Seedream",
         execute: async ({ prompt, model }) =>
           generateImageWithSeedream({
@@ -254,7 +279,11 @@ const PLATFORM_SPECS: Record<Platform, PlatformSpec> = {
           }),
       },
       edit: {
-        models: ["doubao-seedream-4-0-250828"],
+        models: [
+          "doubao-seedream-5-0-260128",
+          "doubao-seedream-4-5-251128",
+          "doubao-seedream-4-0-250828",
+        ],
         caption: "Edited with Volc Seedream",
         execute: async ({ prompt, model }) =>
           generateImageWithSeededit({
@@ -275,6 +304,16 @@ const PLATFORM_SPECS: Record<Platform, PlatformSpec> = {
             prompt,
             num_images: 1,
             aspect_ratio: aspectRatio,
+            output_format: outputFormat,
+            model,
+          }),
+      },
+      edit: {
+        models: ["xai/grok-imagine-image/edit"],
+        caption: "Edited with Grok Imagine",
+        execute: async ({ prompt, outputFormat, model }) =>
+          generateImageWithFalEdit({
+            prompt,
             output_format: outputFormat,
             model,
           }),
@@ -410,7 +449,7 @@ async function generateImageWithFal(
   if (falClient) {
     falClient.config({ credentials: falKey });
 
-    const result = await falClient.subscribe("xai/grok-imagine-image", {
+    const result = await falClient.subscribe(input.model, {
       input: {
         prompt: input.prompt,
         num_images: input.num_images || 1,
@@ -434,7 +473,7 @@ async function generateImageWithFal(
     };
   }
 
-  const response = await fetch("https://fal.run/xai/grok-imagine-image", {
+  const response = await fetch(`https://fal.run/${input.model}`, {
     method: "POST",
     headers: {
       Authorization: `Key ${falKey}`,
@@ -458,6 +497,83 @@ async function generateImageWithFal(
 
   if (!media) {
     throw new Error("fal response missing images[0].url");
+  }
+
+  return {
+    media,
+    source: "url",
+    model: input.model,
+    revisedPrompt: data.revised_prompt,
+  };
+}
+
+/**
+ * Edit image using Grok Imagine via fal.ai
+ */
+async function generateImageWithFalEdit(
+  input: Omit<GrokImagineEditInput, "image_url"> & { model: string }
+): Promise<GeneratedImage> {
+  const falKey = process.env.FAL_KEY;
+
+  if (!falKey) {
+    throw new Error(
+      "FAL_KEY environment variable not set. Get your key from https://fal.ai/dashboard/keys"
+    );
+  }
+
+  const imageUrl = await resolveFalEditImage();
+
+  if (falClient) {
+    falClient.config({ credentials: falKey });
+
+    const result = await falClient.subscribe(input.model, {
+      input: {
+        prompt: input.prompt,
+        image_url: imageUrl,
+        num_images: input.num_images || 1,
+        output_format: input.output_format || "jpeg",
+      },
+    });
+
+    const data = result.data as GrokImagineResponse;
+    const media = data.images?.[0]?.url;
+
+    if (!media) {
+      throw new Error("fal edit response missing images[0].url");
+    }
+
+    return {
+      media,
+      source: "url",
+      model: input.model,
+      revisedPrompt: data.revised_prompt,
+    };
+  }
+
+  const response = await fetch(`https://fal.run/${input.model}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Key ${falKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      prompt: input.prompt,
+      image_url: imageUrl,
+      num_images: input.num_images || 1,
+      output_format: input.output_format || "jpeg",
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`fal image edit failed: ${error}`);
+  }
+
+  const data = (await response.json()) as GrokImagineResponse;
+  const media = data.images?.[0]?.url;
+
+  if (!media) {
+    throw new Error("fal edit response missing images[0].url");
   }
 
   return {
@@ -728,18 +844,18 @@ function resolveArkBaseUrl(): string {
 }
 
 function resolveSeedreamModel(override?: string): string {
-  return override || "doubao-seedream-4-0-250828";
+  return override || "doubao-seedream-5-0-260128";
 }
 
 function resolveSeededitModel(override?: string): string {
-  return override || "doubao-seedream-4-0-250828";
+  return override || "doubao-seedream-5-0-260128";
 }
 
 function assertNoDeprecatedModel(modelOverride?: string): void {
   if (!modelOverride) return;
   if (/seededit3|seededit-3|seed-edit-3/i.test(modelOverride)) {
     throw new Error(
-      `Deprecated model override detected: ${modelOverride}. seededit3 has been removed. Use Seedream family models (e.g. doubao-seedream-4-0-250828 / doubao-seedream-4-5-250915).`
+      `Deprecated model override detected: ${modelOverride}. seededit3 has been removed. Use Seedream family models (e.g. doubao-seedream-5-0-260128 / doubao-seedream-4-5-251128).`
     );
   }
 }
@@ -1146,6 +1262,8 @@ Environment:
   QWEN_IMAGE_EDIT_IMAGE_URL - Optional reference image URL for qwen-image-edit-plus
   QWEN_IMAGE_EDIT_IMAGE_PATH - Optional local reference image path for qwen-image-edit-plus
   FAL_KEY                  - fal backend key
+  FAL_EDIT_IMAGE_URL       - Optional reference image URL for fal edit
+  FAL_EDIT_IMAGE_PATH      - Optional local reference image path for fal edit
   GOOGLE_API_KEY           - Google backend key (or GEMINI_API_KEY / NANO_BANANA_PRO_API_KEY)
   TENCENT_SECRET_ID        - Tencent Cloud SecretId (hunyuan backend)
   TENCENT_SECRET_KEY       - Tencent Cloud SecretKey (hunyuan backend)
@@ -1161,6 +1279,7 @@ Environment:
   DEFAULT_MODEL_VOLC_GENERATE   - Default model for volc/generate
   DEFAULT_MODEL_VOLC_EDIT       - Default model for volc/edit
   DEFAULT_MODEL_FAL_GENERATE    - Default model for fal/generate
+  DEFAULT_MODEL_FAL_EDIT        - Default model for fal/edit
   DEFAULT_MODEL_GOOGLE_GENERATE - Default model for google/generate
   DEFAULT_MODEL_HUNYUAN_EDIT    - Default model for hunyuan/edit
   OPENCLAW_GATEWAY_URL     - Optional gateway URL
@@ -1170,7 +1289,8 @@ Examples:
   npx ts-node clawra-selfie.ts --list-models
   DASHSCOPE_API_KEY=*** npx ts-node clawra-selfie.ts "A stylish mirror selfie" "#art" "Qwen" "1:1" "png" "qwen" "generate"
   DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png npx ts-node clawra-selfie.ts "换成电影海报风格" "#art" "Qwen edit" "3:4" "png" "qwen" "edit" "qwen-image-edit-plus"
-  ARK_API_KEY=*** npx ts-node clawra-selfie.ts "城市夜景风格" "#art" "Volc" "1:1" "png" "volc" "edit" "doubao-seedream-4-0-250828"
+  FAL_KEY=*** FAL_EDIT_IMAGE_URL=https://example.com/input.png npx ts-node clawra-selfie.ts "change to a beach vacation style" "#art" "Grok edit" "1:1" "jpeg" "fal" "edit" "xai/grok-imagine-image/edit"
+  ARK_API_KEY=*** npx ts-node clawra-selfie.ts "城市夜景风格" "#art" "Volc" "1:1" "png" "volc" "edit" "doubao-seedream-5-0-260128"
   GOOGLE_API_KEY=*** npx ts-node clawra-selfie.ts "A cat astronaut" "#art" "Google" "1:1" "png" "google" "generate" "gemini-3-pro-image-preview"
 `);
     process.exit(1);
@@ -1209,6 +1329,7 @@ Examples:
 // Export for module use
 export {
   generateImageWithFal,
+  generateImageWithFalEdit,
   generateImageWithQwen,
   generateImageWithQwenEdit,
   generateImageWithSeedream,

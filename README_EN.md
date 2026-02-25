@@ -23,8 +23,8 @@ The script now uses a unified structure: `platform -> operation(generate/edit) -
 | Platform | Operation | Default model (full API name) | Required Config |
 |---|---|---|---|
 | `qwen` | `generate` / `edit` | `qwen-image-plus-2026-01-09` / `qwen-image-edit-plus` | `DASHSCOPE_API_KEY` |
-| `volc` | `generate` / `edit` | `doubao-seedream-4-0-250828` / `doubao-seedream-4-0-250828` | `ARK_API_KEY` |
-| `fal` | `generate` | `xai/grok-imagine-image` | `FAL_KEY` |
+| `volc` | `generate` / `edit` | `doubao-seedream-5-0-260128` / `doubao-seedream-5-0-260128` | `ARK_API_KEY` |
+| `fal` | `generate` / `edit` | `xai/grok-imagine-image` / `xai/grok-imagine-image/edit` | `FAL_KEY` |
 | `google` | `generate` | `gemini-3-pro-image-preview` | `GOOGLE_API_KEY` |
 | `hunyuan` | `edit` | `aiart/v20221229 SubmitTextToImageJob` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` |
 
@@ -119,6 +119,8 @@ ARK_API_KEY=your_key
 
 # fal
 FAL_KEY=your_key
+FAL_EDIT_IMAGE_URL=https://example.com/input.png  # optional, fal edit reference image
+FAL_EDIT_IMAGE_PATH=/path/to/input.png            # optional, takes precedence over URL
 
 # Google
 GOOGLE_API_KEY=your_key
@@ -135,9 +137,10 @@ OPENCLAW_GATEWAY_TOKEN=your_token
 # Optional: set default model per platform/operation
 DEFAULT_MODEL_QWEN_GENERATE=qwen-image-plus-2026-01-09
 DEFAULT_MODEL_QWEN_EDIT=qwen-image-edit-plus
-DEFAULT_MODEL_VOLC_GENERATE=doubao-seedream-4-0-250828
-DEFAULT_MODEL_VOLC_EDIT=doubao-seedream-4-0-250828
+DEFAULT_MODEL_VOLC_GENERATE=doubao-seedream-5-0-260128
+DEFAULT_MODEL_VOLC_EDIT=doubao-seedream-5-0-260128
 DEFAULT_MODEL_FAL_GENERATE=xai/grok-imagine-image
+DEFAULT_MODEL_FAL_EDIT=xai/grok-imagine-image/edit
 DEFAULT_MODEL_GOOGLE_GENERATE=gemini-3-pro-image-preview
 DEFAULT_MODEL_HUNYUAN_EDIT="aiart/v20221229 SubmitTextToImageJob"
 ```

@@ -5,6 +5,10 @@
   "bin": {
     "clawra": "./bin/cli.js"
   },
+  "scripts": {
+    "clawra": "ts-node scripts/clawra-selfie.ts",
+    "list-models": "ts-node scripts/clawra-selfie.ts --list-models"
+  },
   "files": [
     "bin/",
     "skill/",

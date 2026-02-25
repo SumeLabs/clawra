@@ -59,10 +59,11 @@ Supported platforms and full model names:
   - `generate`: `qwen-image-plus-2026-01-09` (default)
   - `edit`: `qwen-image-edit-plus` (default)
 - `volc`
-  - `generate`: `doubao-seedream-4-0-250828` (default)
-  - `edit`: `doubao-seedream-4-0-250828` (default)
+  - `generate`: `doubao-seedream-5-0-260128` (default), `doubao-seedream-4-5-251128`, `doubao-seedream-4-0-250828`
+  - `edit`: `doubao-seedream-5-0-260128` (default), `doubao-seedream-4-5-251128`, `doubao-seedream-4-0-250828`
 - `fal`
   - `generate`: `xai/grok-imagine-image` (default)
+  - `edit`: `xai/grok-imagine-image/edit` (default)
 - `google`
   - `generate`: `gemini-3-pro-image-preview` (default), `gemini-2.5-flash-image`
 - `hunyuan`
@@ -201,15 +202,19 @@ DASHSCOPE_API_KEY=*** QWEN_IMAGE_EDIT_IMAGE_URL=https://example.com/input.png \
 
 # volc generate — ARK_API_KEY
 ARK_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc" "generate" "doubao-seedream-4-0-250828"
+  npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Seedream" "1:1" "png" "volc" "generate" "doubao-seedream-5-0-260128"
 
 # volc edit — ARK_API_KEY
 ARK_API_KEY=*** \
-  npx ts-node scripts/clawra-selfie.ts "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc" "edit" "doubao-seedream-4-0-250828"
+  npx ts-node scripts/clawra-selfie.ts "换成海边度假风格" "#art" "Seededit" "1:1" "png" "volc" "edit" "doubao-seedream-4-5-251128"
 
 # fal generate — FAL_KEY
 FAL_KEY=*** \
   npx ts-node scripts/clawra-selfie.ts "a cyberpunk city selfie" "#art" "Grok" "1:1" "jpeg" "fal" "generate" "xai/grok-imagine-image"
+
+# fal edit — FAL_KEY + FAL_EDIT_IMAGE_URL
+FAL_KEY=*** FAL_EDIT_IMAGE_URL=https://example.com/input.png \
+  npx ts-node scripts/clawra-selfie.ts "switch to beach vacation style" "#art" "Grok edit" "1:1" "jpeg" "fal" "edit" "xai/grok-imagine-image/edit"
 
 # hunyuan edit — TENCENT_SECRET_ID + TENCENT_SECRET_KEY
 TENCENT_SECRET_ID=*** TENCENT_SECRET_KEY=*** \

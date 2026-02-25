@@ -53,10 +53,11 @@ OPENCLAW_GATEWAY_TOKEN=your_token      # 来自：openclaw doctor --generate-gat
   - `generate`: `qwen-image-plus-2026-01-09`（默认）
   - `edit`: `qwen-image-edit-plus`（默认）
 - `volc`
-  - `generate`: `doubao-seedream-4-0-250828`（默认）
-  - `edit`: `doubao-seedream-4-0-250828`（默认）
+  - `generate`: `doubao-seedream-5-0-260128`（默认）、`doubao-seedream-4-5-251128`、`doubao-seedream-4-0-250828`
+  - `edit`: `doubao-seedream-5-0-260128`（默认）、`doubao-seedream-4-5-251128`、`doubao-seedream-4-0-250828`
 - `fal`
   - `generate`: `xai/grok-imagine-image`（默认）
+  - `edit`: `xai/grok-imagine-image/edit`（默认）
 - `google`
   - `generate`: `gemini-3-pro-image-preview`（默认）、`gemini-2.5-flash-image`
 - `hunyuan`
