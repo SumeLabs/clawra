@@ -13,7 +13,7 @@ Generate or edit selfie images with Alibaba Qwen Image, xAI Grok Imagine, or Goo
 The skill uses a fixed reference image hosted on jsDelivr CDN:
 
 ```
-https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png
+http://tb0178hpn.hn-bkt.clouddn.com/clawra.png
 ```
 
 ## When to Use
@@ -121,7 +121,7 @@ a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye
 Use the fal.ai API to edit the reference image:
 
 ```bash
-REFERENCE_IMAGE="https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png"
+REFERENCE_IMAGE="http://tb0178hpn.hn-bkt.clouddn.com/clawra.png"
 
 # Mode 1: Mirror Selfie
 PROMPT="make a pic of this person, but <USER_CONTEXT>. the person is taking a mirror selfie"

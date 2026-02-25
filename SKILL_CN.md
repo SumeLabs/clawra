@@ -13,7 +13,7 @@ allowed-tools: Bash(npm:*) Bash(npx:*) Bash(openclaw:*) Bash(curl:*) Read Write 
 该 skill 使用托管在 jsDelivr CDN 上的固定参考图片：
 
 ```
-https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png
+http://tb0178hpn.hn-bkt.clouddn.com/clawra.png
 ```
 
 ## 使用场景
@@ -129,7 +129,7 @@ a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye
 使用 fal.ai API 编辑参考图片：
 
 ```bash
-REFERENCE_IMAGE="https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png"
+REFERENCE_IMAGE="http://tb0178hpn.hn-bkt.clouddn.com/clawra.png"
 
 # 模式一：镜像自拍
 PROMPT="make a pic of this person, but <USER_CONTEXT>. the person is taking a mirror selfie"

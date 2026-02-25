@@ -215,7 +215,7 @@ async function resolveQwenEditImages(): Promise<string[]> {
 
   return [
     process.env.QWEN_IMAGE_EDIT_IMAGE_URL ||
-      "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png",
+      "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png",
   ];
 }
 
@@ -229,7 +229,7 @@ async function resolveFalEditImage(): Promise<string> {
 
   return (
     process.env.FAL_EDIT_IMAGE_URL ||
-    "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png"
+    "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png"
   );
 }
 
@@ -929,7 +929,7 @@ async function generateImageWithSeededit(options: {
       return `data:image/png;base64,${data.toString("base64")}`;
     }
 
-    return "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png";
+    return "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png";
   })();
 
   // Seedream supports text-to-image and image-edit on the same /images/generations endpoint.
@@ -1056,7 +1056,7 @@ async function generateImageWithHunyuan(options: {
 
   const refUrl =
     process.env.TENCENT_REFERENCE_IMAGE_URL ||
-    "https://blog-images-1255793008.cos.ap-shanghai.myqcloud.com/images/clawra.png";
+    "http://tb0178hpn.hn-bkt.clouddn.com/clawra.png";
 
   const resolution =
     process.env.TENCENT_RESOLUTION ||
