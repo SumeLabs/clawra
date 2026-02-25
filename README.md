@@ -133,6 +133,7 @@ TENCENT_AIART_ENDPOINT=aiart.tencentcloudapi.com
 
 # OpenClaw
 OPENCLAW_GATEWAY_TOKEN=your_token
+CLAWRA_DOWNLOAD_URL_MEDIA=1  # 可选，发送前将 URL 媒体下载到本地临时文件（默认开启，设为 0 关闭）
 
 # 可选：设置平台默认模型
 DEFAULT_MODEL_QWEN_GENERATE=qwen-image-plus-2026-01-09

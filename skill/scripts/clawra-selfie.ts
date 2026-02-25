@@ -205,6 +205,63 @@ function detectImageMimeType(filePath: string): string {
   }
 }
 
+function extensionFromMimeType(mimeType?: string | null): string | undefined {
+  if (!mimeType) return undefined;
+  const normalized = mimeType.split(";")[0].trim().toLowerCase();
+  switch (normalized) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/bmp":
+      return "bmp";
+    case "image/tiff":
+      return "tiff";
+    default:
+      return undefined;
+  }
+}
+
+function extensionFromUrl(mediaUrl: string): string | undefined {
+  try {
+    const pathname = new URL(mediaUrl).pathname;
+    const ext = path.extname(pathname).toLowerCase().replace(".", "");
+    if (!ext) return undefined;
+    if (!/^[a-z0-9]+$/.test(ext)) return undefined;
+    return ext;
+  } catch {
+    return undefined;
+  }
+}
+
+function shouldDownloadUrlMediaForSend(): boolean {
+  return process.env.CLAWRA_DOWNLOAD_URL_MEDIA !== "0";
+}
+
+async function materializeUrlMediaToLocalFile(mediaUrl: string): Promise<string> {
+  const response = await fetch(mediaUrl);
+  if (!response.ok) {
+    throw new Error(`download failed: HTTP ${response.status}`);
+  }
+
+  const contentType = response.headers?.get?.("content-type");
+  const ext = extensionFromMimeType(contentType) || extensionFromUrl(mediaUrl) || "bin";
+  const outputPath = path.join(
+    os.tmpdir(),
+    `clawra-media-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+  );
+
+  const buffer = typeof response.arrayBuffer === "function"
+    ? Buffer.from(await response.arrayBuffer())
+    : Buffer.from(await response.text());
+  await fs.writeFile(outputPath, buffer);
+  return outputPath;
+}
+
 async function resolveQwenEditImages(): Promise<string[]> {
   if (process.env.QWEN_IMAGE_EDIT_IMAGE_PATH) {
     const imagePath = process.env.QWEN_IMAGE_EDIT_IMAGE_PATH;
@@ -1249,6 +1306,17 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     console.log(`[INFO] Revised prompt: ${generated.revisedPrompt}`);
   }
 
+  let mediaForSend = generated.media;
+  if (generated.source === "url" && shouldDownloadUrlMediaForSend()) {
+    try {
+      mediaForSend = await materializeUrlMediaToLocalFile(generated.media);
+      console.log(`[INFO] Media downloaded for send: ${mediaForSend}`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      console.warn(`[WARN] Failed to download media URL before send, fallback to URL: ${reason}`);
+    }
+  }
+
   console.log(`[INFO] Sending to channel: ${channel}`);
 
   await sendViaOpenClaw(
@@ -1256,7 +1324,7 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
       action: "send",
       channel,
       message: messageText,
-      media: generated.media,
+      media: mediaForSend,
     },
     useOpenClawCLI
   );
@@ -1321,6 +1389,7 @@ Environment:
   TENCENT_LOGO_ADD         - Add watermark 0|1 (default: 0)
   TENCENT_REVISE           - Prompt rewriting 0|1 (default: 1)
   TENCENT_SEED             - Optional random seed (integer)
+  CLAWRA_DOWNLOAD_URL_MEDIA - Download URL media to local file before send (default: 1, set 0 to disable)
   DEFAULT_MODEL_QWEN_GENERATE   - Default model for qwen/generate
   DEFAULT_MODEL_QWEN_EDIT       - Default model for qwen/edit
   DEFAULT_MODEL_VOLC_GENERATE   - Default model for volc/generate

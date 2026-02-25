@@ -33,12 +33,22 @@ function resetEnv() {
   }
 }
 
-function makeResponse(payload, status = 200) {
+function makeResponse(payload, status = 200, options = {}) {
+  const rawHeaders = options.headers || {};
+  const normalizedHeaders = Object.fromEntries(
+    Object.entries(rawHeaders).map(([key, value]) => [String(key).toLowerCase(), String(value)])
+  );
   const raw = typeof payload === "string" ? payload : JSON.stringify(payload);
+  const binary = options.binary || Buffer.from(raw);
   return {
     ok: status >= 200 && status < 300,
     status,
+    headers: {
+      get: (key) => normalizedHeaders[String(key).toLowerCase()] || null,
+    },
     text: async () => raw,
+    arrayBuffer: async () =>
+      binary.buffer.slice(binary.byteOffset, binary.byteOffset + binary.byteLength),
     json: async () => {
       if (typeof payload === "string") {
         return JSON.parse(payload);
@@ -489,6 +499,10 @@ test("generateAndSend uses edit flow and sends OpenClaw message payload", async 
           ],
         },
       }),
+      makeResponse("png-bytes", 200, {
+        headers: { "content-type": "image/png" },
+        binary: Buffer.from("png-bytes"),
+      }),
       makeResponse({ ok: true }),
     ],
     calls
@@ -504,17 +518,21 @@ test("generateAndSend uses edit flow and sends OpenClaw message payload", async 
     useOpenClawCLI: false,
   });
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(
     calls[0].url,
     "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
   );
-  assert.equal(calls[1].url, "http://localhost:18789/message");
+  assert.equal(calls[1].url, "https://img.example/final-edit.png");
+  assert.equal(calls[2].url, "http://localhost:18789/message");
 
-  const sendBody = JSON.parse(calls[1].options.body);
+  const sendBody = JSON.parse(calls[2].options.body);
   assert.equal(sendBody.action, "send");
   assert.equal(sendBody.channel, "#art");
-  assert.equal(sendBody.media, "https://img.example/final-edit.png");
+  assert.match(sendBody.media, /clawra-media-.*\.png$/);
+  const bytes = await fs.readFile(sendBody.media);
+  assert.deepEqual(bytes, Buffer.from("png-bytes"));
+  await fs.unlink(sendBody.media);
   assert.match(sendBody.message, /Edited with Qwen Image/);
   assert.match(sendBody.message, /model: qwen-image-edit-plus/);
 
