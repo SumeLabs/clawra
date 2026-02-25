@@ -7,7 +7,8 @@
   },
   "scripts": {
     "clawra": "ts-node scripts/clawra-selfie.ts",
-    "list-models": "ts-node scripts/clawra-selfie.ts --list-models"
+    "list-models": "ts-node scripts/clawra-selfie.ts --list-models",
+    "test": "node --test tests/**/*.test.js"
   },
   "files": [
     "bin/",
