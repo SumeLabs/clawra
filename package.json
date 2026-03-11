@@ -7,12 +7,16 @@
   },
   "files": [
     "bin/",
+    "src/",
     "skill/",
     "templates/",
+    "docs/",
     "SKILL.md",
     "scripts/",
     "assets/"
   ],
+  "main": "src/index.js",
+  "type": "module",
   "keywords": [
     "openclaw",
     "grok",

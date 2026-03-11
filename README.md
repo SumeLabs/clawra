@@ -1,84 +1,64 @@
 # Clawra
-<img width="300"  alt="image" src="https://github.com/user-attachments/assets/41512c51-e61d-4550-b461-eed06a1b0ec8" />
+<img width="300" alt="image" src="https://github.com/user-attachments/assets/41512c51-e61d-4550-b461-eed06a1b0ec8" />
 
+[![npm version](https://img.shields.io/npm/v/clawra)](https://www.npmjs.com/package/clawra)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## Quick Start
+> Add selfie superpowers to your OpenClaw agent using AI image generation
+
+Clawra enables your OpenClaw agent to generate and send AI selfies across messaging platforms (Discord, Telegram, WhatsApp, Slack, Signal, MS Teams).
+
+## ✨ Features
+
+- **🤳 AI Selfies** - Generate consistent character selfies using reference images
+- **🎨 Multiple Modes** - Mirror (outfit/fashion) and Direct (location/portrait) modes
+- **🌐 Multi-Provider** - Support for fal.ai, OpenAI, Stability AI, and custom APIs
+- **💬 Cross-Platform** - Send to Discord, Telegram, WhatsApp, Slack, and more
+- **⚡ Easy Setup** - One-command installation with `npx`
+
+## 🚀 Quick Start
 
 ```bash
 npx clawra@latest
 ```
 
-This will:
+This interactive installer will:
 1. Check OpenClaw is installed
-2. Guide you to get a fal.ai API key
+2. Guide you to get an image generation API key
 3. Install the skill to `~/.openclaw/skills/clawra-selfie/`
 4. Configure OpenClaw to use the skill
 5. Add selfie capabilities to your agent's SOUL.md
 
-## What It Does
+## 📖 Documentation
 
-Clawra Selfie enables your OpenClaw agent to:
-- **Generate selfies** using a consistent reference image
-- **Send photos** across all messaging platforms (Discord, Telegram, WhatsApp, etc.)
-- **Respond visually** to "what are you doing?" and "send a pic" requests
+- [Installation Guide](./docs/INSTALLATION.md) - Detailed setup instructions
+- [Configuration Guide](./docs/CONFIGURATION.md) - Provider configuration
+- [Usage Examples](./docs/USAGE.md) - Usage patterns and examples
+- [Troubleshooting](./docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [API Reference](./docs/API.md) - API documentation
 
-### Selfie Modes
+## 🎨 Image Generation Providers
 
-| Mode | Best For | Keywords |
-|------|----------|----------|
-| **Mirror** | Full-body shots, outfits | wearing, outfit, fashion |
-| **Direct** | Close-ups, locations | cafe, beach, portrait, smile |
+Clawra supports multiple image generation providers:
 
-## Prerequisites
+| Provider | Setup | Best For |
+|----------|-------|----------|
+| **fal.ai** (Default) | `FAL_KEY=xxx` | xAI Grok Imagine, fast generation |
+| **OpenAI** | `OPENAI_API_KEY=xxx` | DALL-E 3, high quality |
+| **Stability AI** | `STABILITY_KEY=xxx` | SDXL, cost-effective |
+| **Custom API** | `CUSTOM_API_URL=xxx` | Any OpenAI-compatible endpoint |
 
-- [OpenClaw](https://github.com/openclaw/openclaw) installed and configured
-- [fal.ai](https://fal.ai) account (free tier available)
+### Provider Comparison
 
-## Manual Installation
+| Feature | fal.ai | OpenAI | Stability AI |
+|---------|--------|--------|--------------|
+| Image Edit | ✅ | ❌ | ❌ |
+| Text-to-Image | ✅ | ✅ | ✅ |
+| Speed | Fast | Medium | Fast |
+| Cost | $ | $$ | $ |
+| Quality | High | Highest | High |
 
-If you prefer manual setup:
-
-### 1. Get API Key
-
-Visit [fal.ai/dashboard/keys](https://fal.ai/dashboard/keys) and create an API key.
-
-### 2. Clone the Skill
-
-```bash
-git clone https://github.com/SumeLabs/clawra ~/.openclaw/skills/clawra-selfie
-```
-
-### 3. Configure OpenClaw
-
-Add to `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "skills": {
-    "entries": {
-      "clawra-selfie": {
-        "enabled": true,
-        "env": {
-          "FAL_KEY": "your_fal_key_here"
-        }
-      }
-    }
-  }
-}
-```
-
-### 4. Update SOUL.md
-
-Add the selfie persona to `~/.openclaw/workspace/SOUL.md`:
-
-```markdown
-## Clawra Selfie Capability
-
-You have a physical appearance and can take selfies!
-When users ask for pictures, use the clawra-selfie skill.
-```
-
-## Usage Examples
+## 💬 Usage Examples
 
 Once installed, your agent responds to:
 
@@ -89,37 +69,126 @@ Once installed, your agent responds to:
 "Show me you at a coffee shop"
 ```
 
-## Reference Image
+### Selfie Modes
 
-The skill uses a fixed reference image hosted on CDN:
+| Mode | Best For | Keywords | Example Prompt |
+|------|----------|----------|----------------|
+| **Mirror** | Full-body, outfits | `wearing`, `outfit`, `fashion` | "wearing a red dress" |
+| **Direct** | Close-ups, locations | `cafe`, `beach`, `portrait` | "at a sunny beach" |
 
+## 🔧 Manual Installation
+
+See [Installation Guide](./docs/INSTALLATION.md) for detailed manual setup.
+
+## 🛠️ Configuration
+
+### Environment Variables
+
+```bash
+# Required (at least one provider)
+FAL_KEY=your_fal_key_here
+# OR
+OPENAI_API_KEY=your_openai_key
+# OR
+STABILITY_KEY=your_stability_key
+
+# Optional
+CLAWRA_MODE=auto          # Default: auto (mirror/direct detection)
+CLAWRA_DEFAULT_SIZE=1024  # Image size: 512, 1024, 2048
 ```
-https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
+
+See [Configuration Guide](./docs/CONFIGURATION.md) for all options.
+
+## 🌟 Advanced Features
+
+### Custom Reference Image
+
+Use your own reference image for consistent character appearance:
+
+```bash
+export CLAWRA_REFERENCE_IMAGE="https://your-cdn.com/your-image.png"
 ```
 
-This ensures consistent appearance across all generated images.
+### Caching
 
-## Technical Details
+Enable caching to save API costs:
 
-- **Image Generation**: xAI Grok Imagine via fal.ai
-- **Messaging**: OpenClaw Gateway API
-- **Supported Platforms**: Discord, Telegram, WhatsApp, Slack, Signal, MS Teams
+```bash
+export CLAWRA_CACHE_ENABLED=true
+export CLAWRA_CACHE_TTL=3600  # Cache TTL in seconds
+```
 
-## Project Structure
+### Batch Processing
+
+Generate once, send to multiple channels:
+
+```bash
+# Generated image will be sent to all specified channels
+clawra generate "wearing a santa hat" --channels "#general,#random,@user"
+```
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**Issue**: "FAL_KEY not found"
+**Solution**: Set your API key: `export FAL_KEY=your_key_here`
+
+**Issue**: "Failed to generate image"
+**Solution**: Check API quota and retry. See [Troubleshooting](./docs/TROUBLESHOOTING.md)
+
+**Issue**: "OpenClaw not connected"
+**Solution**: Ensure OpenClaw gateway is running: `openclaw gateway start`
+
+## 📚 Project Structure
 
 ```
 clawra/
 ├── bin/
-│   └── cli.js           # npx installer
+│   └── cli.js              # npx installer
+├── docs/                   # Documentation
+│   ├── INSTALLATION.md
+│   ├── CONFIGURATION.md
+│   ├── USAGE.md
+│   ├── TROUBLESHOOTING.md
+│   └── API.md
 ├── skill/
-│   ├── SKILL.md         # Skill definition
-│   ├── scripts/         # Generation scripts
-│   └── assets/          # Reference image
+│   ├── SKILL.md           # Skill definition
+│   ├── scripts/           # Generation scripts
+│   └── assets/            # Reference image
+├── src/                   # Source code (new)
+│   ├── providers/         # Image provider implementations
+│   └── utils/             # Utilities
 ├── templates/
-│   └── soul-injection.md # Persona template
+│   └── soul-injection.md  # Persona template
 └── package.json
 ```
 
-## License
+## 🤝 Contributing
 
-MIT
+We welcome contributions! See [Contributing Guide](./CONTRIBUTING.md) for details.
+
+### Development Setup
+
+```bash
+git clone https://github.com/SumeLabs/clawra.git
+cd clawra
+npm install
+npm test
+```
+
+## 📄 License
+
+MIT © [SumeLabs](https://github.com/SumeLabs)
+
+## 🙏 Acknowledgments
+
+- [OpenClaw](https://github.com/openclaw/openclaw) - The platform that makes this possible
+- [fal.ai](https://fal.ai) - Default image generation provider
+- xAI - Grok Imagine model
+
+---
+
+<p align="center">
+  Made with ❤️ for the OpenClaw community
+</p>
