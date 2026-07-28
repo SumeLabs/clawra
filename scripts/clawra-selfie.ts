@@ -1,14 +1,23 @@
 /**
- * Grok Imagine to OpenClaw Integration
+ * Clawra Selfie - Image Generation to OpenClaw Integration
  *
- * Generates images using xAI's Grok Imagine model via fal.ai
- * and sends them to messaging channels via OpenClaw.
+ * Generates images using a configurable image generation provider and
+ * sends them to messaging channels via OpenClaw.
+ *
+ * Supported providers:
+ *   - grok:   xAI Grok Imagine via fal.ai (default)
+ *   - minimax: MiniMax image-01 / image-01-live via the regional
+ *             image_generation endpoints
  *
  * Usage:
- *   npx ts-node grok-imagine-send.ts "<prompt>" "<channel>" ["<caption>"]
+ *   npx ts-node clawra-selfie.ts "<prompt>" "<channel>" ["<caption>"]
  *
  * Environment variables:
- *   FAL_KEY - Your fal.ai API key
+ *   PROVIDER          - "grok" (default) or "minimax"
+ *   FAL_KEY           - Your fal.ai API key (required for the grok provider)
+ *   MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)
+ *   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
+ *   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
  *   OPENCLAW_GATEWAY_URL - OpenClaw gateway URL (default: http://localhost:18789)
  *   OPENCLAW_GATEWAY_TOKEN - Gateway auth token (optional)
  */
@@ -63,6 +72,48 @@ type AspectRatio =
 
 type OutputFormat = "jpeg" | "png" | "webp";
 
+type Provider = "grok" | "minimax";
+
+// MiniMax configuration (derived from the MiniMax image_generation reference).
+// Regional endpoints for the image_generation operation.
+const MINIMAX_ENDPOINTS: Record<string, string> = {
+  global_en: "https://api.minimax.io/v1/image_generation",
+  cn_zh: "https://api.minimaxi.com/v1/image_generation",
+};
+
+// Supported MiniMax image models. The first entry is the default.
+const MINIMAX_MODELS: string[] = ["image-01", "image-01-live"];
+const MINIMAX_DEFAULT_MODEL: string = MINIMAX_MODELS[0];
+const MINIMAX_DEFAULT_REGION: string = "global_en";
+
+// MiniMax image_generation request fields (per the image reference).
+interface MiniMaxImageRequest {
+  model: string;
+  prompt: string;
+  subject_reference?: string;
+  aspect_ratio?: string;
+  width?: number;
+  height?: number;
+  response_format?: "url" | "base64";
+  seed?: number;
+  n?: number;
+  prompt_optimizer?: boolean;
+}
+
+interface MiniMaxResponse {
+  data?: {
+    image_urls?: string[];
+  };
+  metadata?: {
+    success_count?: number;
+    failed_count?: number;
+  };
+  base_resp?: {
+    status_code?: number;
+    status_msg?: string;
+  };
+}
+
 interface GenerateAndSendOptions {
   prompt: string;
   channel: string;
@@ -70,6 +121,16 @@ interface GenerateAndSendOptions {
   aspectRatio?: AspectRatio;
   outputFormat?: OutputFormat;
   useClaudeCodeCLI?: boolean;
+  provider?: Provider;
+  // MiniMax-only options
+  minimaxRegion?: string;
+  minimaxModel?: string;
+  subjectReference?: string;
+  width?: number;
+  height?: number;
+  seed?: number;
+  n?: number;
+  promptOptimizer?: boolean;
 }
 
 interface Result {
@@ -78,6 +139,7 @@ interface Result {
   channel: string;
   prompt: string;
   revisedPrompt?: string;
+  provider: Provider;
 }
 
 // Check for fal.ai client
@@ -93,7 +155,7 @@ try {
 /**
  * Generate image using Grok Imagine via fal.ai
  */
-async function generateImage(
+async function generateImageGrok(
   input: GrokImagineInput
 ): Promise<GrokImagineResponse> {
   const falKey = process.env.FAL_KEY;
@@ -144,6 +206,117 @@ async function generateImage(
 }
 
 /**
+ * Generate image using MiniMax image_generation.
+ *
+ * Calls the regional image_generation endpoint with Bearer authorization,
+ * sends the documented request fields, and parses `data.image_urls`.
+ */
+async function generateImageMiniMax(
+  options: GenerateAndSendOptions
+): Promise<string> {
+  const apiKey = process.env.MINIMAX_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "MINIMAX_API_KEY environment variable not set. Get your key from https://platform.minimax.io"
+    );
+  }
+
+  const region = options.minimaxRegion || MINIMAX_DEFAULT_REGION;
+  const endpoint = MINIMAX_ENDPOINTS[region];
+  if (!endpoint) {
+    throw new Error(
+      `Unknown MINIMAX_REGION "${region}". Supported regions: ${Object.keys(
+        MINIMAX_ENDPOINTS
+      ).join(", ")}`
+    );
+  }
+
+  const model = options.minimaxModel || MINIMAX_DEFAULT_MODEL;
+  if (!MINIMAX_MODELS.includes(model)) {
+    throw new Error(
+      `Unknown MiniMax model "${model}". Supported models: ${MINIMAX_MODELS.join(
+        ", "
+      )}`
+    );
+  }
+
+  // Build the request body from the documented request fields, only including
+  // optional fields when they are provided.
+  const body: MiniMaxImageRequest = {
+    model,
+    prompt: options.prompt,
+  };
+
+  if (options.subjectReference) {
+    body.subject_reference = options.subjectReference;
+  }
+  if (options.aspectRatio) {
+    body.aspect_ratio = options.aspectRatio;
+  }
+  if (options.width !== undefined) {
+    body.width = options.width;
+  }
+  if (options.height !== undefined) {
+    body.height = options.height;
+  }
+  if (options.seed !== undefined) {
+    body.seed = options.seed;
+  }
+  if (options.n !== undefined) {
+    body.n = options.n;
+  }
+  if (options.promptOptimizer !== undefined) {
+    body.prompt_optimizer = options.promptOptimizer;
+  }
+
+  console.log(`[INFO] MiniMax region: ${region}`);
+  console.log(`[INFO] MiniMax model: ${model}`);
+  console.log(`[INFO] Endpoint: ${endpoint}`);
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const error = await response.text();
+    throw new Error(`MiniMax image generation failed: ${error}`);
+  }
+
+  const result = (await response.json()) as MiniMaxResponse;
+
+  // Parse the documented response fields.
+  const statusCode = result.base_resp?.status_code;
+  if (statusCode !== undefined && statusCode !== 0) {
+    const statusMsg = result.base_resp?.status_msg || "unknown error";
+    throw new Error(
+      `MiniMax image generation failed (status_code=${statusCode}): ${statusMsg}`
+    );
+  }
+
+  const imageUrls = result.data?.image_urls;
+  if (!imageUrls || imageUrls.length === 0) {
+    throw new Error(
+      "MiniMax image generation returned no image URLs in data.image_urls"
+    );
+  }
+
+  const successCount = result.metadata?.success_count;
+  const failedCount = result.metadata?.failed_count;
+  if (successCount !== undefined || failedCount !== undefined) {
+    console.log(
+      `[INFO] MiniMax metadata: success_count=${successCount ?? "n/a"} failed_count=${failedCount ?? "n/a"}`
+    );
+  }
+
+  return imageUrls[0];
+}
+
+/**
  * Send image via OpenClaw
  */
 async function sendViaOpenClaw(
@@ -183,35 +356,59 @@ async function sendViaOpenClaw(
 }
 
 /**
+ * Resolve the image generation provider from the environment.
+ */
+function resolveProvider(optional?: Provider): Provider {
+  const fromEnv = (process.env.PROVIDER || "").toLowerCase();
+  if (optional) {
+    return optional;
+  }
+  if (fromEnv === "minimax") {
+    return "minimax";
+  }
+  return "grok";
+}
+
+/**
  * Main function: Generate image and send to channel
  */
 async function generateAndSend(options: GenerateAndSendOptions): Promise<Result> {
   const {
     prompt,
     channel,
-    caption = "Generated with Grok Imagine",
+    caption = "Generated with Clawra Selfie",
     aspectRatio = "1:1",
     outputFormat = "jpeg",
     useClaudeCodeCLI = true,
   } = options;
 
-  console.log(`[INFO] Generating image with Grok Imagine...`);
+  const provider = resolveProvider(options.provider);
+
+  console.log(`[INFO] Provider: ${provider}`);
+  console.log(`[INFO] Generating image...`);
   console.log(`[INFO] Prompt: ${prompt}`);
   console.log(`[INFO] Aspect ratio: ${aspectRatio}`);
 
-  // Generate image
-  const imageResult = await generateImage({
-    prompt,
-    num_images: 1,
-    aspect_ratio: aspectRatio,
-    output_format: outputFormat,
-  });
+  let imageUrl: string;
+  let revisedPrompt: string | undefined;
 
-  const imageUrl = imageResult.images[0].url;
+  if (provider === "minimax") {
+    imageUrl = await generateImageMiniMax(options);
+  } else {
+    const imageResult = await generateImageGrok({
+      prompt,
+      num_images: 1,
+      aspect_ratio: aspectRatio,
+      output_format: outputFormat,
+    });
+    imageUrl = imageResult.images[0].url;
+    revisedPrompt = imageResult.revised_prompt;
+  }
+
   console.log(`[INFO] Image generated: ${imageUrl}`);
 
-  if (imageResult.revised_prompt) {
-    console.log(`[INFO] Revised prompt: ${imageResult.revised_prompt}`);
+  if (revisedPrompt) {
+    console.log(`[INFO] Revised prompt: ${revisedPrompt}`);
   }
 
   // Send via OpenClaw
@@ -234,7 +431,8 @@ async function generateAndSend(options: GenerateAndSendOptions): Promise<Result>
     imageUrl,
     channel,
     prompt,
-    revisedPrompt: imageResult.revised_prompt,
+    revisedPrompt,
+    provider,
   };
 }
 
@@ -244,20 +442,27 @@ async function main() {
 
   if (args.length < 2) {
     console.log(`
-Usage: npx ts-node grok-imagine-send.ts <prompt> <channel> [caption] [aspect_ratio] [output_format]
+Usage: npx ts-node clawra-selfie.ts <prompt> <channel> [caption] [aspect_ratio] [output_format]
 
 Arguments:
   prompt        - Image description (required)
   channel       - Target channel (required) e.g., #general, @user
-  caption       - Message caption (default: 'Generated with Grok Imagine')
+  caption       - Message caption (default: 'Generated with Clawra Selfie')
   aspect_ratio  - Image ratio (default: 1:1) Options: 2:1, 16:9, 4:3, 1:1, 3:4, 9:16
-  output_format - Image format (default: jpeg) Options: jpeg, png, webp
+  output_format - Image format (default: jpeg) Options: jpeg, png, webp (grok provider)
 
 Environment:
-  FAL_KEY       - Your fal.ai API key (required)
+  PROVIDER          - "grok" (default) or "minimax"
+  FAL_KEY           - Your fal.ai API key (required for the grok provider)
+  MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)
+  MINIMAX_REGION    - "global_en" (default) or "cn_zh"
+  MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
 
-Example:
-  FAL_KEY=your_key npx ts-node grok-imagine-send.ts "A cyberpunk city" "#art" "Check this out!"
+Example (Grok):
+  FAL_KEY=your_key npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!"
+
+Example (MiniMax):
+  PROVIDER=minimax MINIMAX_API_KEY=your_key npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!"
 `);
     process.exit(1);
   }
@@ -283,11 +488,14 @@ Example:
 
 // Export for module use
 export {
-  generateImage,
+  generateImageGrok,
+  generateImageMiniMax,
   sendViaOpenClaw,
   generateAndSend,
   GrokImagineInput,
   GrokImagineResponse,
+  MiniMaxImageRequest,
+  MiniMaxResponse,
   OpenClawMessage,
   GenerateAndSendOptions,
   Result,

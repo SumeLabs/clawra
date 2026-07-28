@@ -1,12 +1,31 @@
 ---
 name: clawra-selfie
-description: Edit Clawra's reference image with Grok Imagine (xAI Aurora) and send selfies to messaging channels via OpenClaw
+description: Generate and edit Clawra's reference image with a configurable image generation provider and send selfies to messaging channels via OpenClaw
 allowed-tools: Bash(npm:*) Bash(npx:*) Bash(openclaw:*) Bash(curl:*) Read Write WebFetch
 ---
 
 # Clawra Selfie
 
-Edit a fixed reference image using xAI's Grok Imagine model and distribute it across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
+Generate and edit a fixed reference image using a configurable image generation provider and distribute it across messaging platforms (WhatsApp, Telegram, Discord, Slack, etc.) via OpenClaw.
+
+## Providers
+
+The skill supports two image generation providers, selected with the `PROVIDER` environment variable:
+
+| Provider | `PROVIDER` | API key env | Models | Endpoint |
+|----------|------------|-------------|--------|----------|
+| Grok Imagine (xAI) via fal.ai | `grok` (default) | `FAL_KEY` | `xai/grok-imagine-image` | `https://fal.run/xai/grok-imagine-image` |
+| MiniMax image_generation | `minimax` | `MINIMAX_API_KEY` | `image-01`, `image-01-live` | regional `image_generation` endpoint |
+
+### MiniMax image_generation
+
+The MiniMax provider calls the regional `image_generation` endpoint with Bearer authorization and parses the `data.image_urls` response field.
+
+- **Regions:** `global_en` (default) -> `https://api.minimax.io/v1/image_generation`; `cn_zh` -> `https://api.minimaxi.com/v1/image_generation`
+- **Models:** `image-01` (default), `image-01-live`
+- **Authorization:** `Bearer $MINIMAX_API_KEY`
+- **Request fields:** `model`, `prompt`, `subject_reference`, `aspect_ratio`, `width`, `height`, `response_format`, `seed`, `n`, `prompt_optimizer`
+- **Response fields:** `data.image_urls`, `metadata.success_count`, `metadata.failed_count`, `base_resp.status_code` (success = `0`)
 
 ## Reference Image
 
@@ -29,15 +48,25 @@ https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
 ### Required Environment Variables
 
 ```bash
+# Provider selection (optional): "grok" (default) or "minimax"
+PROVIDER=grok
+
+# Grok Imagine provider (fal.ai)
 FAL_KEY=your_fal_api_key          # Get from https://fal.ai/dashboard/keys
+
+# MiniMax provider (image_generation)
+MINIMAX_API_KEY=your_minimax_key  # Get from https://platform.minimax.io
+MINIMAX_REGION=global_en          # global_en (default) or cn_zh
+MINIMAX_MODEL=image-01            # image-01 (default) or image-01-live
+
 OPENCLAW_GATEWAY_TOKEN=your_token  # From: openclaw doctor --generate-gateway-token
 ```
 
 ### Workflow
 
 1. **Get user prompt** for how to edit the image
-2. **Edit image** via fal.ai Grok Imagine Edit API with fixed reference
-3. **Extract image URL** from response
+2. **Generate/edit image** via the configured provider (Grok Imagine via fal.ai, or MiniMax image_generation)
+3. **Extract image URL** from the response (`images[0].url` for Grok, `data.image_urls[0]` for MiniMax)
 4. **Send to OpenClaw** with target channel(s)
 
 ## Step-by-Step Instructions
