@@ -14,6 +14,7 @@
 #   MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)
 #   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
 #   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
+#   MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
 #
 # Example:
 #   FAL_KEY=your_key ./clawra-selfie.sh "A sunset over mountains" "#art" "Check this out!"
@@ -89,6 +90,7 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
     echo "  MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)"
     echo "  MINIMAX_REGION    - 'global_en' (default) or 'cn_zh'"
     echo "  MINIMAX_MODEL     - 'image-01' (default) or 'image-01-live'"
+    echo "  MINIMAX_RESPONSE_FORMAT - 'url' (default) or 'base64'"
     echo ""
     echo "Example (Grok):"
     echo "  FAL_KEY=your_key $0 \"A cyberpunk city at night\" \"#art-gallery\" \"AI Art!\""
@@ -112,6 +114,7 @@ if [ "$PROVIDER" = "minimax" ]; then
 
     MINIMAX_REGION="${MINIMAX_REGION:-global_en}"
     MINIMAX_MODEL="${MINIMAX_MODEL:-image-01}"
+    MINIMAX_RESPONSE_FORMAT="${MINIMAX_RESPONSE_FORMAT:-url}"
 
     case "$MINIMAX_REGION" in
         global_en) ENDPOINT="https://api.minimax.io/v1/image_generation" ;;
@@ -130,6 +133,14 @@ if [ "$PROVIDER" = "minimax" ]; then
             ;;
     esac
 
+    case "$MINIMAX_RESPONSE_FORMAT" in
+        url|base64) ;;
+        *)
+            log_error "Unknown MINIMAX_RESPONSE_FORMAT '$MINIMAX_RESPONSE_FORMAT'. Supported: url, base64"
+            exit 1
+            ;;
+    esac
+
     log_info "MiniMax region: $MINIMAX_REGION"
     log_info "MiniMax model: $MINIMAX_MODEL"
     log_info "Endpoint: $ENDPOINT"
@@ -139,7 +150,8 @@ if [ "$PROVIDER" = "minimax" ]; then
         --arg model "$MINIMAX_MODEL" \
         --arg prompt "$PROMPT" \
         --arg aspect_ratio "$ASPECT_RATIO" \
-        '{model: $model, prompt: $prompt, aspect_ratio: $aspect_ratio}')
+        --arg response_format "$MINIMAX_RESPONSE_FORMAT" \
+        '{model: $model, prompt: $prompt, aspect_ratio: $aspect_ratio, response_format: $response_format}')
 
     RESPONSE=$(curl -s -X POST "$ENDPOINT" \
         -H "Authorization: Bearer $MINIMAX_API_KEY" \

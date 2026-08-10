@@ -58,6 +58,7 @@ FAL_KEY=your_fal_api_key          # Get from https://fal.ai/dashboard/keys
 MINIMAX_API_KEY=your_minimax_key  # Get from https://platform.minimax.io
 MINIMAX_REGION=global_en          # global_en (default) or cn_zh
 MINIMAX_MODEL=image-01            # image-01 (default) or image-01-live
+MINIMAX_RESPONSE_FORMAT=url       # url (default) or base64
 
 OPENCLAW_GATEWAY_TOKEN=your_token  # From: openclaw doctor --generate-gateway-token
 ```

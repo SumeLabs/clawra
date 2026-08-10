@@ -18,6 +18,7 @@
  *   MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)
  *   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
  *   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
+ *   MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
  *   OPENCLAW_GATEWAY_URL - OpenClaw gateway URL (default: http://localhost:18789)
  *   OPENCLAW_GATEWAY_TOKEN - Gateway auth token (optional)
  */
@@ -73,6 +74,7 @@ type AspectRatio =
 type OutputFormat = "jpeg" | "png" | "webp";
 
 type Provider = "grok" | "minimax";
+type MiniMaxResponseFormat = "url" | "base64";
 
 // MiniMax configuration (derived from the MiniMax image_generation reference).
 // Regional endpoints for the image_generation operation.
@@ -125,6 +127,7 @@ interface GenerateAndSendOptions {
   // MiniMax-only options
   minimaxRegion?: string;
   minimaxModel?: string;
+  minimaxResponseFormat?: MiniMaxResponseFormat;
   subjectReference?: string;
   width?: number;
   height?: number;
@@ -221,7 +224,10 @@ async function generateImageMiniMax(
     );
   }
 
-  const region = options.minimaxRegion || MINIMAX_DEFAULT_REGION;
+  const region =
+    options.minimaxRegion ||
+    process.env.MINIMAX_REGION ||
+    MINIMAX_DEFAULT_REGION;
   const endpoint = MINIMAX_ENDPOINTS[region];
   if (!endpoint) {
     throw new Error(
@@ -231,7 +237,8 @@ async function generateImageMiniMax(
     );
   }
 
-  const model = options.minimaxModel || MINIMAX_DEFAULT_MODEL;
+  const model =
+    options.minimaxModel || process.env.MINIMAX_MODEL || MINIMAX_DEFAULT_MODEL;
   if (!MINIMAX_MODELS.includes(model)) {
     throw new Error(
       `Unknown MiniMax model "${model}". Supported models: ${MINIMAX_MODELS.join(
@@ -246,6 +253,17 @@ async function generateImageMiniMax(
     model,
     prompt: options.prompt,
   };
+
+  const responseFormat =
+    options.minimaxResponseFormat ||
+    process.env.MINIMAX_RESPONSE_FORMAT ||
+    "url";
+  if (responseFormat !== "url" && responseFormat !== "base64") {
+    throw new Error(
+      `Unknown MINIMAX_RESPONSE_FORMAT "${responseFormat}". Supported formats: url, base64`
+    );
+  }
+  body.response_format = responseFormat;
 
   if (options.subjectReference) {
     body.subject_reference = options.subjectReference;
@@ -457,6 +475,7 @@ Environment:
   MINIMAX_API_KEY   - Your MiniMax API key (required for the minimax provider)
   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
+  MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
 
 Example (Grok):
   FAL_KEY=your_key npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!"
