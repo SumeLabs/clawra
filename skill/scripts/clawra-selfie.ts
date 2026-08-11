@@ -19,6 +19,11 @@
  *   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
  *   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
  *   MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
+ *   MINIMAX_SUBJECT_REFERENCE - Reference image URL or data URL (defaults to Clawra)
+ *   MINIMAX_WIDTH / MINIMAX_HEIGHT - Optional image dimensions, set together
+ *   MINIMAX_SEED      - Optional integer seed
+ *   MINIMAX_N         - Optional image count from 1 to 9
+ *   MINIMAX_PROMPT_OPTIMIZER - Optional "true" or "false"
  *   OPENCLAW_GATEWAY_URL - OpenClaw gateway URL (default: http://localhost:18789)
  *   OPENCLAW_GATEWAY_TOKEN - Gateway auth token (optional)
  */
@@ -27,6 +32,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+const REFERENCE_IMAGE =
+  "https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png";
 
 // Types
 interface GrokImagineInput {
@@ -75,25 +82,41 @@ type OutputFormat = "jpeg" | "png" | "webp";
 
 type Provider = "grok" | "minimax";
 type MiniMaxResponseFormat = "url" | "base64";
+type MiniMaxRegion = "global_en" | "cn_zh";
+type MiniMaxModel = "image-01" | "image-01-live";
+type MiniMaxAspectRatio =
+  | "1:1"
+  | "16:9"
+  | "4:3"
+  | "3:2"
+  | "2:3"
+  | "3:4"
+  | "9:16"
+  | "21:9";
 
 // MiniMax configuration (derived from the MiniMax image_generation reference).
 // Regional endpoints for the image_generation operation.
-const MINIMAX_ENDPOINTS: Record<string, string> = {
+const MINIMAX_ENDPOINTS: Record<MiniMaxRegion, string> = {
   global_en: "https://api.minimax.io/v1/image_generation",
   cn_zh: "https://api.minimaxi.com/v1/image_generation",
 };
 
 // Supported MiniMax image models. The first entry is the default.
-const MINIMAX_MODELS: string[] = ["image-01", "image-01-live"];
-const MINIMAX_DEFAULT_MODEL: string = MINIMAX_MODELS[0];
-const MINIMAX_DEFAULT_REGION: string = "global_en";
+const MINIMAX_MODELS: MiniMaxModel[] = ["image-01", "image-01-live"];
+const MINIMAX_DEFAULT_MODEL: MiniMaxModel = MINIMAX_MODELS[0];
+const MINIMAX_DEFAULT_REGION: MiniMaxRegion = "global_en";
+
+interface MiniMaxSubjectReference {
+  type: "character";
+  image_file: string;
+}
 
 // MiniMax image_generation request fields (per the image reference).
 interface MiniMaxImageRequest {
-  model: string;
+  model: MiniMaxModel;
   prompt: string;
-  subject_reference?: string;
-  aspect_ratio?: string;
+  subject_reference?: MiniMaxSubjectReference[];
+  aspect_ratio?: MiniMaxAspectRatio;
   width?: number;
   height?: number;
   response_format?: "url" | "base64";
@@ -125,10 +148,10 @@ interface GenerateAndSendOptions {
   useClaudeCodeCLI?: boolean;
   provider?: Provider;
   // MiniMax-only options
-  minimaxRegion?: string;
-  minimaxModel?: string;
+  minimaxRegion?: MiniMaxRegion;
+  minimaxModel?: MiniMaxModel;
   minimaxResponseFormat?: MiniMaxResponseFormat;
-  subjectReference?: string;
+  subjectReference?: MiniMaxSubjectReference[];
   width?: number;
   height?: number;
   seed?: number;
@@ -224,28 +247,30 @@ async function generateImageMiniMax(
     );
   }
 
-  const region =
+  const regionValue =
     options.minimaxRegion ||
     process.env.MINIMAX_REGION ||
     MINIMAX_DEFAULT_REGION;
-  const endpoint = MINIMAX_ENDPOINTS[region];
-  if (!endpoint) {
+  if (!(regionValue in MINIMAX_ENDPOINTS)) {
     throw new Error(
-      `Unknown MINIMAX_REGION "${region}". Supported regions: ${Object.keys(
+      `Unknown MINIMAX_REGION "${regionValue}". Supported regions: ${Object.keys(
         MINIMAX_ENDPOINTS
       ).join(", ")}`
     );
   }
+  const region = regionValue as MiniMaxRegion;
+  const endpoint = MINIMAX_ENDPOINTS[region];
 
-  const model =
+  const modelValue =
     options.minimaxModel || process.env.MINIMAX_MODEL || MINIMAX_DEFAULT_MODEL;
-  if (!MINIMAX_MODELS.includes(model)) {
+  if (!MINIMAX_MODELS.includes(modelValue as MiniMaxModel)) {
     throw new Error(
-      `Unknown MiniMax model "${model}". Supported models: ${MINIMAX_MODELS.join(
+      `Unknown MiniMax model "${modelValue}". Supported models: ${MINIMAX_MODELS.join(
         ", "
       )}`
     );
   }
+  const model = modelValue as MiniMaxModel;
 
   // Build the request body from the documented request fields, only including
   // optional fields when they are provided.
@@ -265,26 +290,64 @@ async function generateImageMiniMax(
   }
   body.response_format = responseFormat;
 
-  if (options.subjectReference) {
-    body.subject_reference = options.subjectReference;
-  }
+  body.subject_reference = options.subjectReference || [
+    {
+      type: "character",
+      image_file: process.env.MINIMAX_SUBJECT_REFERENCE || REFERENCE_IMAGE,
+    },
+  ];
+
   if (options.aspectRatio) {
-    body.aspect_ratio = options.aspectRatio;
+    const supportedRatios: MiniMaxAspectRatio[] = [
+      "1:1",
+      "16:9",
+      "4:3",
+      "3:2",
+      "2:3",
+      "3:4",
+      "9:16",
+      "21:9",
+    ];
+    if (!supportedRatios.includes(options.aspectRatio as MiniMaxAspectRatio)) {
+      throw new Error(
+        `Unsupported MiniMax aspect ratio "${options.aspectRatio}". Supported ratios: ${supportedRatios.join(
+          ", "
+        )}`
+      );
+    }
+    body.aspect_ratio = options.aspectRatio as MiniMaxAspectRatio;
   }
-  if (options.width !== undefined) {
-    body.width = options.width;
+
+  const width =
+    options.width ?? parseOptionalIntegerEnv("MINIMAX_WIDTH");
+  const height =
+    options.height ?? parseOptionalIntegerEnv("MINIMAX_HEIGHT");
+  if ((width === undefined) !== (height === undefined)) {
+    throw new Error("MINIMAX_WIDTH and MINIMAX_HEIGHT must be set together");
   }
-  if (options.height !== undefined) {
-    body.height = options.height;
+  if (width !== undefined && height !== undefined) {
+    body.width = width;
+    body.height = height;
   }
-  if (options.seed !== undefined) {
-    body.seed = options.seed;
+
+  const seed = options.seed ?? parseOptionalIntegerEnv("MINIMAX_SEED");
+  if (seed !== undefined) {
+    body.seed = seed;
   }
-  if (options.n !== undefined) {
-    body.n = options.n;
+
+  const imageCount = options.n ?? parseOptionalIntegerEnv("MINIMAX_N");
+  if (imageCount !== undefined) {
+    if (imageCount < 1 || imageCount > 9) {
+      throw new Error("MINIMAX_N must be between 1 and 9");
+    }
+    body.n = imageCount;
   }
-  if (options.promptOptimizer !== undefined) {
-    body.prompt_optimizer = options.promptOptimizer;
+
+  const promptOptimizer =
+    options.promptOptimizer ??
+    parseOptionalBooleanEnv("MINIMAX_PROMPT_OPTIMIZER");
+  if (promptOptimizer !== undefined) {
+    body.prompt_optimizer = promptOptimizer;
   }
 
   console.log(`[INFO] MiniMax region: ${region}`);
@@ -334,6 +397,31 @@ async function generateImageMiniMax(
   return imageUrls[0];
 }
 
+function parseOptionalIntegerEnv(name: string): number | undefined {
+  const value = process.env[name];
+  if (!value) {
+    return undefined;
+  }
+  if (!/^-?\d+$/.test(value)) {
+    throw new Error(`${name} must be an integer`);
+  }
+  return Number(value);
+}
+
+function parseOptionalBooleanEnv(name: string): boolean | undefined {
+  const value = process.env[name];
+  if (!value) {
+    return undefined;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error(`${name} must be "true" or "false"`);
+}
+
 /**
  * Send image via OpenClaw
  */
@@ -381,10 +469,15 @@ function resolveProvider(optional?: Provider): Provider {
   if (optional) {
     return optional;
   }
+  if (!fromEnv || fromEnv === "grok") {
+    return "grok";
+  }
   if (fromEnv === "minimax") {
     return "minimax";
   }
-  return "grok";
+  throw new Error(
+    `Unknown PROVIDER "${process.env.PROVIDER}". Supported providers: grok, minimax`
+  );
 }
 
 /**
@@ -466,7 +559,7 @@ Arguments:
   prompt        - Image description (required)
   channel       - Target channel (required) e.g., #general, @user
   caption       - Message caption (default: 'Generated with Clawra Selfie')
-  aspect_ratio  - Image ratio (default: 1:1) Options: 2:1, 16:9, 4:3, 1:1, 3:4, 9:16
+  aspect_ratio  - Image ratio (default: 1:1); MiniMax also supports 3:2, 2:3, 21:9
   output_format - Image format (default: jpeg) Options: jpeg, png, webp (grok provider)
 
 Environment:
@@ -476,6 +569,11 @@ Environment:
   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
   MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
+  MINIMAX_SUBJECT_REFERENCE - Reference image URL or data URL (defaults to Clawra)
+  MINIMAX_WIDTH / MINIMAX_HEIGHT - Optional image dimensions, set together
+  MINIMAX_SEED       - Optional integer seed
+  MINIMAX_N          - Optional image count from 1 to 9
+  MINIMAX_PROMPT_OPTIMIZER - Optional "true" or "false"
 
 Example (Grok):
   FAL_KEY=your_key npx ts-node clawra-selfie.ts "A cyberpunk city" "#art" "Check this out!"
@@ -515,6 +613,7 @@ export {
   GrokImagineResponse,
   MiniMaxImageRequest,
   MiniMaxResponse,
+  MiniMaxSubjectReference,
   OpenClawMessage,
   GenerateAndSendOptions,
   Result,

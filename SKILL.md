@@ -59,6 +59,12 @@ MINIMAX_API_KEY=your_minimax_key  # Get from https://platform.minimax.io
 MINIMAX_REGION=global_en          # global_en (default) or cn_zh
 MINIMAX_MODEL=image-01            # image-01 (default) or image-01-live
 MINIMAX_RESPONSE_FORMAT=url       # url (default) or base64
+MINIMAX_SUBJECT_REFERENCE=https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png
+MINIMAX_WIDTH=1024                # optional; set together with MINIMAX_HEIGHT
+MINIMAX_HEIGHT=1024               # optional; set together with MINIMAX_WIDTH
+MINIMAX_SEED=12345                # optional integer
+MINIMAX_N=1                       # optional, 1-9
+MINIMAX_PROMPT_OPTIMIZER=false    # optional, true or false
 
 OPENCLAW_GATEWAY_TOKEN=your_token  # From: openclaw doctor --generate-gateway-token
 ```
@@ -115,7 +121,22 @@ a close-up selfie taken by herself at a cozy cafe with warm lighting, direct eye
 | close-up, portrait, face, eyes, smile | `direct` |
 | full-body, mirror, reflection | `mirror` |
 
-### Step 2: Edit Image with Grok Imagine
+### Step 2: Generate or Edit with the Configured Provider
+
+Use the bundled executable for normal skill operation. It selects the regional endpoint, sends Bearer authorization, includes the Clawra reference image as `subject_reference`, and parses `data.image_urls`.
+
+```bash
+# MiniMax with the default global endpoint, image-01 model, and Clawra reference image
+PROVIDER=minimax MINIMAX_API_KEY="$MINIMAX_API_KEY" \
+  ./scripts/clawra-selfie.sh "$PROMPT" "$CHANNEL" "$CAPTION" "1:1"
+
+# China endpoint and image-01-live model
+PROVIDER=minimax MINIMAX_REGION=cn_zh MINIMAX_MODEL=image-01-live \
+  MINIMAX_API_KEY="$MINIMAX_API_KEY" \
+  ./scripts/clawra-selfie.sh "$PROMPT" "$CHANNEL" "$CAPTION" "1:1"
+```
+
+The direct API example below applies only to the `grok` provider.
 
 Use the fal.ai API to edit the reference image:
 
@@ -180,7 +201,7 @@ curl -X POST "http://localhost:18789/message" \
   }'
 ```
 
-## Complete Script Example
+## Grok-only Direct API Example
 
 ```bash
 #!/bin/bash
@@ -263,7 +284,7 @@ openclaw message send \
 echo "Done!"
 ```
 
-## Node.js/TypeScript Implementation
+## Grok-only Node.js/TypeScript Example
 
 ```typescript
 import { fal } from "@fal-ai/client";
@@ -395,7 +416,7 @@ OpenClaw supports sending to:
 
 ## Setup Requirements
 
-### 1. Install fal.ai client (for Node.js usage)
+### 1. Install fal.ai client (for Grok Node.js usage)
 ```bash
 npm install @fal-ai/client
 ```
@@ -419,6 +440,8 @@ openclaw gateway start
 ## Error Handling
 
 - **FAL_KEY missing**: Ensure the API key is set in environment
+- **MINIMAX_API_KEY missing**: Set the MiniMax API key when `PROVIDER=minimax`
+- **MiniMax request failed**: Check the selected region, model, request options, and API quota
 - **Image edit failed**: Check prompt content and API quota
 - **OpenClaw send failed**: Verify gateway is running and channel exists
 - **Rate limits**: fal.ai has rate limits; implement retry logic if needed

@@ -15,6 +15,11 @@
 #   MINIMAX_REGION    - "global_en" (default) or "cn_zh"
 #   MINIMAX_MODEL     - "image-01" (default) or "image-01-live"
 #   MINIMAX_RESPONSE_FORMAT - "url" (default) or "base64"
+#   MINIMAX_SUBJECT_REFERENCE - Reference image URL or data URL (defaults to Clawra)
+#   MINIMAX_WIDTH / MINIMAX_HEIGHT - Optional image dimensions, set together
+#   MINIMAX_SEED      - Optional integer seed
+#   MINIMAX_N         - Optional image count from 1 to 9
+#   MINIMAX_PROMPT_OPTIMIZER - Optional "true" or "false"
 #
 # Example:
 #   FAL_KEY=your_key ./clawra-selfie.sh "A sunset over mountains" "#art" "Check this out!"
@@ -71,7 +76,7 @@ fi
 PROMPT="${1:-}"
 CHANNEL="${2:-}"
 CAPTION="${3:-Generated with Clawra Selfie}"
-ASPECT_RATIO="${4:-1:1}"
+ASPECT_RATIO="${4:-}"
 OUTPUT_FORMAT="${5:-jpeg}"
 
 if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
@@ -81,7 +86,7 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
     echo "  prompt        - Image description (required)"
     echo "  channel       - Target channel (required) e.g., #general, @user"
     echo "  caption       - Message caption (default: 'Generated with Clawra Selfie')"
-    echo "  aspect_ratio  - Image ratio (default: 1:1) Options: 2:1, 16:9, 4:3, 1:1, 3:4, 9:16"
+    echo "  aspect_ratio  - Image ratio (default: 1:1); MiniMax also supports 3:2, 2:3, 21:9"
     echo "  output_format - Image format (default: jpeg) Options: jpeg, png, webp (grok provider)"
     echo ""
     echo "Environment:"
@@ -91,6 +96,11 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
     echo "  MINIMAX_REGION    - 'global_en' (default) or 'cn_zh'"
     echo "  MINIMAX_MODEL     - 'image-01' (default) or 'image-01-live'"
     echo "  MINIMAX_RESPONSE_FORMAT - 'url' (default) or 'base64'"
+    echo "  MINIMAX_SUBJECT_REFERENCE - Reference image URL or data URL (defaults to Clawra)"
+    echo "  MINIMAX_WIDTH / MINIMAX_HEIGHT - Optional image dimensions, set together"
+    echo "  MINIMAX_SEED      - Optional integer seed"
+    echo "  MINIMAX_N         - Optional image count from 1 to 9"
+    echo "  MINIMAX_PROMPT_OPTIMIZER - Optional 'true' or 'false'"
     echo ""
     echo "Example (Grok):"
     echo "  FAL_KEY=your_key $0 \"A cyberpunk city at night\" \"#art-gallery\" \"AI Art!\""
@@ -100,7 +110,7 @@ if [ -z "$PROMPT" ] || [ -z "$CHANNEL" ]; then
 fi
 
 log_info "Prompt: $PROMPT"
-log_info "Aspect ratio: $ASPECT_RATIO"
+log_info "Aspect ratio: ${ASPECT_RATIO:-provider default}"
 
 IMAGE_URL=""
 
@@ -115,6 +125,12 @@ if [ "$PROVIDER" = "minimax" ]; then
     MINIMAX_REGION="${MINIMAX_REGION:-global_en}"
     MINIMAX_MODEL="${MINIMAX_MODEL:-image-01}"
     MINIMAX_RESPONSE_FORMAT="${MINIMAX_RESPONSE_FORMAT:-url}"
+    MINIMAX_SUBJECT_REFERENCE="${MINIMAX_SUBJECT_REFERENCE:-https://cdn.jsdelivr.net/gh/SumeLabs/clawra@main/assets/clawra.png}"
+    MINIMAX_WIDTH="${MINIMAX_WIDTH:-}"
+    MINIMAX_HEIGHT="${MINIMAX_HEIGHT:-}"
+    MINIMAX_SEED="${MINIMAX_SEED:-}"
+    MINIMAX_N="${MINIMAX_N:-}"
+    MINIMAX_PROMPT_OPTIMIZER="${MINIMAX_PROMPT_OPTIMIZER:-}"
 
     case "$MINIMAX_REGION" in
         global_en) ENDPOINT="https://api.minimax.io/v1/image_generation" ;;
@@ -141,6 +157,40 @@ if [ "$PROVIDER" = "minimax" ]; then
             ;;
     esac
 
+    case "$ASPECT_RATIO" in
+        ""|1:1|16:9|4:3|3:2|2:3|3:4|9:16|21:9) ;;
+        *)
+            log_error "Unsupported MiniMax aspect ratio '$ASPECT_RATIO'"
+            exit 1
+            ;;
+    esac
+
+    if { [ -n "$MINIMAX_WIDTH" ] && [ -z "$MINIMAX_HEIGHT" ]; } || \
+       { [ -z "$MINIMAX_WIDTH" ] && [ -n "$MINIMAX_HEIGHT" ]; }; then
+        log_error "MINIMAX_WIDTH and MINIMAX_HEIGHT must be set together"
+        exit 1
+    fi
+
+    for VALUE in "$MINIMAX_WIDTH" "$MINIMAX_HEIGHT" "$MINIMAX_SEED" "$MINIMAX_N"; do
+        if [ -n "$VALUE" ] && ! [[ "$VALUE" =~ ^-?[0-9]+$ ]]; then
+            log_error "MiniMax numeric options must be integers"
+            exit 1
+        fi
+    done
+
+    if [ -n "$MINIMAX_N" ] && { [ "$MINIMAX_N" -lt 1 ] || [ "$MINIMAX_N" -gt 9 ]; }; then
+        log_error "MINIMAX_N must be between 1 and 9"
+        exit 1
+    fi
+
+    case "$MINIMAX_PROMPT_OPTIMIZER" in
+        ""|true|false) ;;
+        *)
+            log_error "MINIMAX_PROMPT_OPTIMIZER must be 'true' or 'false'"
+            exit 1
+            ;;
+    esac
+
     log_info "MiniMax region: $MINIMAX_REGION"
     log_info "MiniMax model: $MINIMAX_MODEL"
     log_info "Endpoint: $ENDPOINT"
@@ -149,9 +199,26 @@ if [ "$PROVIDER" = "minimax" ]; then
     JSON_PAYLOAD=$(jq -n \
         --arg model "$MINIMAX_MODEL" \
         --arg prompt "$PROMPT" \
+        --arg subject_reference "$MINIMAX_SUBJECT_REFERENCE" \
         --arg aspect_ratio "$ASPECT_RATIO" \
         --arg response_format "$MINIMAX_RESPONSE_FORMAT" \
-        '{model: $model, prompt: $prompt, aspect_ratio: $aspect_ratio, response_format: $response_format}')
+        --arg width "$MINIMAX_WIDTH" \
+        --arg height "$MINIMAX_HEIGHT" \
+        --arg seed "$MINIMAX_SEED" \
+        --arg n "$MINIMAX_N" \
+        --arg prompt_optimizer "$MINIMAX_PROMPT_OPTIMIZER" \
+        '{
+            model: $model,
+            prompt: $prompt,
+            subject_reference: [{type: "character", image_file: $subject_reference}],
+            response_format: $response_format
+        }
+        + (if $aspect_ratio != "" then {aspect_ratio: $aspect_ratio} else {} end)
+        + (if $width != "" then {width: ($width | tonumber)} else {} end)
+        + (if $height != "" then {height: ($height | tonumber)} else {} end)
+        + (if $seed != "" then {seed: ($seed | tonumber)} else {} end)
+        + (if $n != "" then {n: ($n | tonumber)} else {} end)
+        + (if $prompt_optimizer != "" then {prompt_optimizer: ($prompt_optimizer == "true")} else {} end)')
 
     RESPONSE=$(curl -s -X POST "$ENDPOINT" \
         -H "Authorization: Bearer $MINIMAX_API_KEY" \
@@ -188,6 +255,7 @@ else
     fi
 
     log_info "Generating image with Grok Imagine..."
+    GROK_ASPECT_RATIO="${ASPECT_RATIO:-1:1}"
 
     RESPONSE=$(curl -s -X POST "https://fal.run/xai/grok-imagine-image" \
         -H "Authorization: Key $FAL_KEY" \
@@ -195,7 +263,7 @@ else
         -d "{
             \"prompt\": $(echo "$PROMPT" | jq -Rs .),
             \"num_images\": 1,
-            \"aspect_ratio\": \"$ASPECT_RATIO\",
+            \"aspect_ratio\": \"$GROK_ASPECT_RATIO\",
             \"output_format\": \"$OUTPUT_FORMAT\"
         }")
 
